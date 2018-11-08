@@ -334,6 +334,14 @@ def test_metrics_containers_nan(dcos_api_session):
 
 
 @retrying.retry(wait_fixed=(2 * 1000), stop_max_delay=(150 * 1000))
+def test_zookeeper_metrics_collected(dcos_api_session):
+    for master in dcos_api_session.masters:
+        response = dcos_api_session.session.request('GET', 'http://' + master + ':{}/metrics'.format(61091))
+        assert response.status_code == 200, 'Status code: {}'.format(response.status_code)
+        assert 'TYPE zookeeper_' in response.text
+
+
+@retrying.retry(wait_fixed=(2 * 1000), stop_max_delay=(150 * 1000))
 def assert_app_metric_value_for_task(dcos_api_session, node: str, task_name: str, metric_name: str, metric_value):
     """Assert the value of app metric metric_name for container task_name is metric_value.
 
@@ -415,3 +423,4 @@ def get_app_metrics(dcos_api_session, node: str, container_id: str):
     assert 'datapoints' in app_metrics, 'got {}'.format(app_metrics)
     assert 'dimensions' in app_metrics, 'got {}'.format(app_metrics)
     return app_metrics
+
