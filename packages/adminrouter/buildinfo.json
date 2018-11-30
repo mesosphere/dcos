@@ -1,6 +1,12 @@
 {
   "docker": "dcos/dcos-builder:adminrouter_dockerdir-latest",
   "requires": ["openssl"],
-  "sources": {},
+  "sources": {
+    "nginx-module-vts": {
+      "kind": "url_extract",
+      "url": "https://github.com/vozlt/nginx-module-vts/archive/v0.1.18.tar.gz",
+      "sha1": "8887748e0ef76e459aa2c86244baf382d4f7d4e5"
+    }
+  },
   "username": "dcos_adminrouter"
 }

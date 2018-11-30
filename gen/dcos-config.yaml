@@ -1432,6 +1432,10 @@ package:
         # insecure_skip_verify = true
         [inputs.zookeeper.tags]
           dcos-component-name = "ZooKeeper"
+      # Read Nginx Virtual Host Traffic Status metrics from Admin Router.
+      [[inputs.nginx_vts]]
+        ## An array of Nginx status URIs to gather stats.
+        urls = ["http://localhost/status"]
       # Expose metrics via the dcos-metrics v0 API.
       [[outputs.dcos_metrics]]
         dcos_node_role = "master"
