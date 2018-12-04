@@ -1,4 +1,28 @@
 endpoint_tests:
+######### /nginx/ metrics endpoint
+  # - tests:
+  #     is_response_correct:
+  #       expect_http_status: 201
+  #       nocaching_headers_are_sent: skip
+  #       test_paths:
+  #         - /nginx/status
+  #     is_unauthed_access_permitted:
+  #       locations:
+  #         - /nginx/status
+  #   type:
+  #     - master
+  # - tests:
+  #     is_response_correct:
+  #       expect_http_status: 200
+  #       nocaching_headers_are_sent: skip
+  #       test_paths:
+  #         - /nginx/metrics
+  #     is_unauthed_access_permitted:
+  #       locations:
+  #         - /nginx/metrics
+  #   type:
+  #     - master
+  #     - agent
 ######### /exhibitor endpoint
   - tests:
       is_response_correct:
