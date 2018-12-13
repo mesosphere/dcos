@@ -378,7 +378,7 @@ def test_metrics_node(dcos_api_session):
 
 @pytest.mark.xfailflake(
     reason="DCOS_OSS-4486 - test_metrics_containers fails with container metrics response status 204",
-    date_marked='2018-11-20',
+    since='2018-11-20',
 )
 def test_metrics_containers(dcos_api_session):
     """If there's a deployed container on the slave, iterate through them to check for

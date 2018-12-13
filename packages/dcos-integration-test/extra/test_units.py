@@ -79,7 +79,7 @@ def test_verify_units():
 
 @pytest.mark.xfailflake(
     reason="DCOS-41819 - Fails on dcos-e2e/docker/static/strict.",
-    date_marked='2018-11-20',
+    since='2018-11-20',
 )
 @pytest.mark.supportedwindows
 def test_socket_units():
@@ -126,7 +126,7 @@ def test_socket_units():
 
 @pytest.mark.xfailflake(
     reason="DCOS-45174 test_units.test_socket_files_teardown fails with 503 Server Error:",
-    date_marked='2018-11-20',
+    since='2018-11-20',
 )
 @pytest.mark.supportedwindows
 def test_socket_files():

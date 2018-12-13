@@ -228,7 +228,7 @@ def workload_test(dcos_api_session, container, app_net, proxy_net, ipv6, same_ho
 
 @pytest.mark.xfailflake(
     reason="DCOS-46146 Upgrade docker to version 17.12.x.",
-    date_marked='2018-12-11',
+    since='2018-12-11',
 )
 @pytest.mark.slow
 @pytest.mark.parametrize('same_host', [True, False])
@@ -280,6 +280,20 @@ def test_vip_ipv6(dcos_api_session):
 @pytest.mark.parametrize(
     'container,vip_net,proxy_net',
     generate_vip_app_permutations())
+@pytest.mark.xfailflake(
+    reason=(
+        "DCOS-46220 - test_networking.test_vip can fail because Marathon "
+        "says Constraints for run spec [xxx] not satisfied.",
+    ),
+    since='2018-12-13',
+)
+@pytest.mark.xfailflake(
+    reason=(
+        "DCOS-46220 - test_networking.test_vip can fail because Marathon "
+        "says Constraints for run spec [xxx] not satisfied.",
+    ),
+    since='2018-12-13',
+)
 def test_vip(dcos_api_session,
              container: marathon.Container,
              vip_net: marathon.Network,
@@ -379,7 +393,7 @@ def vip_workload_test(dcos_api_session, container, vip_net, proxy_net, ipv6, nam
 
 @pytest.mark.xfailflake(
     reason="DCOS-46146 Upgrade docker to version 17.12.x.",
-    date_marked='2018-12-11',
+    since='2018-12-11',
 )
 @retrying.retry(wait_fixed=2000,
                 stop_max_delay=120 * 1000,

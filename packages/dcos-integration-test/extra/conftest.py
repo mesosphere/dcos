@@ -49,14 +49,15 @@ def _add_xfail_markers(item):
         marker for marker in item.iter_markers() if marker.name == 'xfailflake'
     ]
     for xfailflake_marker in xfailflake_markers:
-        reason_text = xfailflake_marker.kwargs['reason']
-        assert reason_text.startswith('DCOS-')
-        date_text = xfailflake_marker.kwargs['date_marked']
+        assert 'reason' in xfailflake_marker.kwargs
+        assert 'jira' in xfailflake_marker.kwargs
+        assert xfailflake.kwargs['jira'].startswith('DCOS')
+        date_text = xfailflake_marker.kwargs['since']
         try:
             datetime.datetime.strptime(date_text, '%Y-%m-%d')
         except ValueError:
             message = (
-                'Incorrect date format for "date_marked", should be YYYY-MM-DD'
+                'Incorrect date format for "since", should be YYYY-MM-DD'
             )
             raise ValueError(message)
 

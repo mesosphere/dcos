@@ -6,7 +6,7 @@ __contact__ = 'marathon-team@mesosphere.io'
 
 @pytest.mark.xfailflake(
     reason="DCOS-40611 - test_metronome.test_metronome failed sporadically on Azure ARM platform.",
-    date_marked='2018-11-20',
+    since='2018-11-20',
 )
 def test_metronome(dcos_api_session):
     job = {
