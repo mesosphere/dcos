@@ -78,7 +78,8 @@ def test_verify_units():
 
 
 @pytest.mark.xfailflake(
-    reason="DCOS-41819 - Fails on dcos-e2e/docker/static/strict.",
+    jira='DCOS-41819',
+    reason='Fails on dcos-e2e/docker/static/strict.',
     since='2018-11-20',
 )
 @pytest.mark.supportedwindows
@@ -125,7 +126,8 @@ def test_socket_units():
 
 
 @pytest.mark.xfailflake(
-    reason="DCOS-45174 test_units.test_socket_files_teardown fails with 503 Server Error:",
+    jira='DCOS-45174',
+    reason='test_units.test_socket_files_teardown fails with 503 Server Error:',
     since='2018-11-20',
 )
 @pytest.mark.supportedwindows

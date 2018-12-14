@@ -227,7 +227,8 @@ def workload_test(dcos_api_session, container, app_net, proxy_net, ipv6, same_ho
 
 
 @pytest.mark.xfailflake(
-    reason="DCOS-46146 Upgrade docker to version 17.12.x.",
+    jira='DCOS-46146',
+    reason='Upgrade docker to version 17.12.x.',
     since='2018-12-11',
 )
 @pytest.mark.slow
@@ -281,6 +282,7 @@ def test_vip_ipv6(dcos_api_session):
     'container,vip_net,proxy_net',
     generate_vip_app_permutations())
 @pytest.mark.xfailflake(
+    jira='DCOS-46220',
     reason=(
         "DCOS-46220 - test_networking.test_vip can fail because Marathon "
         "says Constraints for run spec [xxx] not satisfied.",
@@ -288,10 +290,8 @@ def test_vip_ipv6(dcos_api_session):
     since='2018-12-13',
 )
 @pytest.mark.xfailflake(
-    reason=(
-        "DCOS-46220 - test_networking.test_vip can fail because Marathon "
-        "says Constraints for run spec [xxx] not satisfied.",
-    ),
+    jira='DCOS-45799',
+    reason='[Container_MESOS-Network_HOST-Network_HOST] (container stuck in PROVISIONING)',
     since='2018-12-13',
 )
 def test_vip(dcos_api_session,
@@ -392,7 +392,8 @@ def vip_workload_test(dcos_api_session, container, vip_net, proxy_net, ipv6, nam
 
 
 @pytest.mark.xfailflake(
-    reason="DCOS-46146 Upgrade docker to version 17.12.x.",
+    jira='DCOS-46146',
+    reason='Upgrade docker to version 17.12.x.',
     since='2018-12-11',
 )
 @retrying.retry(wait_fixed=2000,

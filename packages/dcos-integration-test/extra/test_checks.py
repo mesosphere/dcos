@@ -10,7 +10,7 @@ __contact__ = 'dcos-cluster-ops@mesosphere.io'
 
 @pytest.mark.xfailflake(
     jira='DCOS-45278',
-    reason="test_checks_cli _wait_for_run_completion",
+    reason='test_checks_cli _wait_for_run_completion',
     since='2018-11-20',
 )
 def test_checks_cli(dcos_api_session):

@@ -52,6 +52,11 @@ def _add_xfail_markers(item):
         assert 'reason' in xfailflake_marker.kwargs
         assert 'jira' in xfailflake_marker.kwargs
         assert xfailflake.kwargs['jira'].startswith('DCOS')
+        # Show the JIRA in the printed reason.
+        xfailflake.kwargs['reason'] = '{jira} - {reason}'.format(
+            jira=xfailflake_marker.kwargs['jira'],
+            reason=xfailflake_marker.kwargs['reason'],
+        )
         date_text = xfailflake_marker.kwargs['since']
         try:
             datetime.datetime.strptime(date_text, '%Y-%m-%d')
