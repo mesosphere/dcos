@@ -1,0 +1,571 @@
+From 194f7fa2730abbfbdcadbe2bc55afc72fb93b0c8 Mon Sep 17 00:00:00 2001
+From: Greg Mann <greg@mesosphere.io>
+Date: Wed, 1 Aug 2018 07:58:49 -0700
+Subject: [PATCH] Tracked completed framework metrics in the allocator.
+
+This ensures that per-framework metrics which are tracked in the
+allocator will be retained as long as the per-framework metrics
+which are tracked in the master.
+
+Review: https://reviews.apache.org/r/66856/
+---
+ include/mesos/allocator/allocator.hpp       |  4 +++-
+ src/master/allocator/mesos/allocator.hpp    | 12 ++++++----
+ src/master/allocator/mesos/hierarchical.cpp | 15 ++++++++++--
+ src/master/allocator/mesos/hierarchical.hpp |  8 ++++++-
+ src/master/master.cpp                       |  3 ++-
+ src/tests/allocator.hpp                     | 11 +++++----
+ src/tests/api_tests.cpp                     |  4 ++--
+ src/tests/master_allocator_tests.cpp        | 36 ++++++++++++++---------------
+ src/tests/master_quota_tests.cpp            | 20 ++++++++--------
+ src/tests/reservation_tests.cpp             |  6 ++---
+ src/tests/resource_offers_tests.cpp         |  2 +-
+ src/tests/slave_recovery_tests.cpp          |  2 +-
+ 12 files changed, 74 insertions(+), 49 deletions(-)
+
+diff --git a/include/mesos/allocator/allocator.hpp b/include/mesos/allocator/allocator.hpp
+index df64faf2d..a0375776c 100644
+--- a/include/mesos/allocator/allocator.hpp
++++ b/include/mesos/allocator/allocator.hpp
+@@ -105,7 +105,9 @@ public:
+       bool filterGpuResources = true,
+       const Option<DomainInfo>& domain = None(),
+       const Option<std::vector<mesos::internal::ResourceQuantities>>&
+-        minAllocatableResources = None()) = 0;
++        minAllocatableResources = None(),
++      const size_t maxCompletedFrameworks = 0) = 0;
++
+ 
+   /**
+    * Informs the allocator of the recovered state from the master.
+diff --git a/src/master/allocator/mesos/allocator.hpp b/src/master/allocator/mesos/allocator.hpp
+index 32dd40cb0..bc35d2fff 100644
+--- a/src/master/allocator/mesos/allocator.hpp
++++ b/src/master/allocator/mesos/allocator.hpp
+@@ -60,7 +60,8 @@ public:
+       bool filterGpuResources = true,
+       const Option<DomainInfo>& domain = None(),
+       const Option<std::vector<mesos::internal::ResourceQuantities>>&
+-        minAllocatableResources = None());
++        minAllocatableResources = None(),
++      const size_t maxCompletedFrameworks = 0);
+ 
+   void recover(
+       const int expectedAgentCount,
+@@ -208,7 +209,8 @@ public:
+       bool filterGpuResources = true,
+       const Option<DomainInfo>& domain = None(),
+       const Option<std::vector<mesos::internal::ResourceQuantities>>&
+-        minAllocatableResources = None()) = 0;
++        minAllocatableResources = None(),
++      const size_t maxCompletedFrameworks = 0) = 0;
+ 
+   virtual void recover(
+       const int expectedAgentCount,
+@@ -365,7 +367,8 @@ inline void MesosAllocator<AllocatorProcess>::initialize(
+     bool filterGpuResources,
+     const Option<DomainInfo>& domain,
+     const Option<std::vector<mesos::internal::ResourceQuantities>>&
+-      minAllocatableResources)
++      minAllocatableResources,
++    const size_t maxCompletedFrameworks)
+ {
+   process::dispatch(
+       process,
+@@ -376,7 +379,8 @@ inline void MesosAllocator<AllocatorProcess>::initialize(
+       fairnessExcludeResourceNames,
+       filterGpuResources,
+       domain,
+-      minAllocatableResources);
++      minAllocatableResources,
++      maxCompletedFrameworks);
+ }
+ 
+ 
+diff --git a/src/master/allocator/mesos/hierarchical.cpp b/src/master/allocator/mesos/hierarchical.cpp
+index 96671033b..2af633c5c 100644
+--- a/src/master/allocator/mesos/hierarchical.cpp
++++ b/src/master/allocator/mesos/hierarchical.cpp
+@@ -159,7 +159,8 @@ void HierarchicalAllocatorProcess::initialize(
+     bool _filterGpuResources,
+     const Option<DomainInfo>& _domain,
+     const Option<std::vector<mesos::internal::ResourceQuantities>>&
+-      _minAllocatableResources)
++      _minAllocatableResources,
++    const size_t maxCompletedFrameworks)
+ {
+   allocationInterval = _allocationInterval;
+   offerCallback = _offerCallback;
+@@ -171,6 +172,10 @@ void HierarchicalAllocatorProcess::initialize(
+   initialized = true;
+   paused = false;
+ 
++  completedFrameworkMetrics =
++    BoundedHashMap<FrameworkID, process::Owned<FrameworkMetrics>>(
++        maxCompletedFrameworks);
++
+   // Resources for quota'ed roles are allocated separately and prior to
+   // non-quota'ed roles, hence a dedicated sorter for quota'ed roles is
+   // necessary.
+@@ -315,7 +320,7 @@ void HierarchicalAllocatorProcess::removeFramework(
+   CHECK(initialized);
+   CHECK(frameworks.contains(frameworkId)) << frameworkId;
+ 
+-  const Framework& framework = frameworks.at(frameworkId);
++  Framework& framework = frameworks.at(frameworkId);
+ 
+   foreach (const string& role, framework.roles) {
+     // Might not be in 'frameworkSorters[role]' because it
+@@ -340,6 +345,12 @@ void HierarchicalAllocatorProcess::removeFramework(
+     untrackFrameworkUnderRole(frameworkId, role);
+   }
+ 
++  // Transfer ownership of this framework's metrics to
++  // `completedFrameworkMetrics`.
++  completedFrameworkMetrics.set(
++      frameworkId,
++      Owned<FrameworkMetrics>(framework.metrics.release()));
++
+   // Do not delete the filters contained in this
+   // framework's `offerFilters` hashset yet, see comments in
+   // HierarchicalAllocatorProcess::reviveOffers and
+diff --git a/src/master/allocator/mesos/hierarchical.hpp b/src/master/allocator/mesos/hierarchical.hpp
+index ec4d445f5..6baf15add 100644
+--- a/src/master/allocator/mesos/hierarchical.hpp
++++ b/src/master/allocator/mesos/hierarchical.hpp
+@@ -26,6 +26,7 @@
+ #include <process/id.hpp>
+ #include <process/owned.hpp>
+ 
++#include <stout/boundedhashmap.hpp>
+ #include <stout/duration.hpp>
+ #include <stout/hashmap.hpp>
+ #include <stout/hashset.hpp>
+@@ -87,6 +88,7 @@ public:
+     : initialized(false),
+       paused(true),
+       metrics(*this),
++      completedFrameworkMetrics(0),
+       roleSorter(roleSorterFactory()),
+       quotaRoleSorter(quotaRoleSorterFactory()),
+       frameworkSorterFactory(_frameworkSorterFactory) {}
+@@ -113,7 +115,8 @@ public:
+       bool filterGpuResources = true,
+       const Option<DomainInfo>& domain = None(),
+       const Option<std::vector<mesos::internal::ResourceQuantities>>&
+-        minAllocatableResources = None());
++        minAllocatableResources = None(),
++      const size_t maxCompletedFrameworks = 0);
+ 
+   void recover(
+       const int _expectedAgentCount,
+@@ -356,6 +359,9 @@ protected:
+ 
+   hashmap<FrameworkID, Framework> frameworks;
+ 
++  BoundedHashMap<FrameworkID, process::Owned<FrameworkMetrics>>
++    completedFrameworkMetrics;
++
+   class Slave
+   {
+   public:
+diff --git a/src/master/master.cpp b/src/master/master.cpp
+index 7f11211df..05b7111e5 100644
+--- a/src/master/master.cpp
++++ b/src/master/master.cpp
+@@ -805,7 +805,8 @@ void Master::initialize()
+       flags.fair_sharing_excluded_resource_names,
+       flags.filter_gpu_resources,
+       flags.domain,
+-      minAllocatableResources);
++      minAllocatableResources,
++      flags.max_completed_frameworks);
+ 
+   // Parse the whitelist. Passing Allocator::updateWhitelist()
+   // callback is safe because we shut down the whitelistWatcher in
+diff --git a/src/tests/allocator.hpp b/src/tests/allocator.hpp
+index c57d2089d..91a1d577c 100644
+--- a/src/tests/allocator.hpp
++++ b/src/tests/allocator.hpp
+@@ -45,7 +45,7 @@ namespace tests {
+ 
+ ACTION_P(InvokeInitialize, allocator)
+ {
+-  allocator->real->initialize(arg0, arg1, arg2, arg3, arg4, arg5, arg6);
++  allocator->real->initialize(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+ }
+ 
+ 
+@@ -235,9 +235,9 @@ public:
+     // to get the best of both worlds: the ability to use 'DoDefault'
+     // and no warnings when expectations are not explicit.
+ 
+-    ON_CALL(*this, initialize(_, _, _, _, _, _, _))
++    ON_CALL(*this, initialize(_, _, _, _, _, _, _, _))
+       .WillByDefault(InvokeInitialize(this));
+-    EXPECT_CALL(*this, initialize(_, _, _, _, _, _, _))
++    EXPECT_CALL(*this, initialize(_, _, _, _, _, _, _, _))
+       .WillRepeatedly(DoDefault());
+ 
+     ON_CALL(*this, recover(_, _))
+@@ -368,7 +368,7 @@ public:
+ 
+   virtual ~TestAllocator() {}
+ 
+-  MOCK_METHOD7(initialize, void(
++  MOCK_METHOD8(initialize, void(
+       const Duration&,
+       const lambda::function<
+           void(const FrameworkID&,
+@@ -379,7 +379,8 @@ public:
+       const Option<std::set<std::string>>&,
+       bool,
+       const Option<DomainInfo>&,
+-      const Option<std::vector<mesos::internal::ResourceQuantities>>&));
++      const Option<std::vector<mesos::internal::ResourceQuantities>>&,
++      const size_t maxCompletedFrameworks));
+ 
+   MOCK_METHOD2(recover, void(
+       const int expectedAgentCount,
+diff --git a/src/tests/api_tests.cpp b/src/tests/api_tests.cpp
+index 5985070f8..742496ba5 100644
+--- a/src/tests/api_tests.cpp
++++ b/src/tests/api_tests.cpp
+@@ -1060,7 +1060,7 @@ TEST_P(MasterAPITest, ReserveResources)
+ {
+   TestAllocator<> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -1151,7 +1151,7 @@ TEST_P(MasterAPITest, UnreserveResources)
+ {
+   TestAllocator<> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator);
+   ASSERT_SOME(master);
+diff --git a/src/tests/master_allocator_tests.cpp b/src/tests/master_allocator_tests.cpp
+index fec69b2f7..10ed36d69 100644
+--- a/src/tests/master_allocator_tests.cpp
++++ b/src/tests/master_allocator_tests.cpp
+@@ -164,7 +164,7 @@ TYPED_TEST(MasterAllocatorTest, SingleFramework)
+ {
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = this->StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -212,7 +212,7 @@ TYPED_TEST(MasterAllocatorTest, ResourcesUnused)
+ 
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = this->StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -321,7 +321,7 @@ TYPED_TEST(MasterAllocatorTest, OutOfOrderDispatch)
+ {
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = this->StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -450,7 +450,7 @@ TYPED_TEST(MasterAllocatorTest, SchedulerFailover)
+ {
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = this->StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -576,7 +576,7 @@ TYPED_TEST(MasterAllocatorTest, FrameworkExited)
+ 
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   master::Flags masterFlags = this->CreateMasterFlags();
+   masterFlags.allocation_interval = Milliseconds(50);
+@@ -736,7 +736,7 @@ TYPED_TEST(MasterAllocatorTest, SlaveLost)
+ {
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = this->StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -860,7 +860,7 @@ TYPED_TEST(MasterAllocatorTest, SlaveAdded)
+ {
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   master::Flags masterFlags = this->CreateMasterFlags();
+   masterFlags.allocation_interval = Milliseconds(50);
+@@ -956,7 +956,7 @@ TYPED_TEST(MasterAllocatorTest, TaskFinished)
+ {
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   master::Flags masterFlags = this->CreateMasterFlags();
+   masterFlags.allocation_interval = Milliseconds(50);
+@@ -1060,7 +1060,7 @@ TYPED_TEST(MasterAllocatorTest, CpusOnlyOfferedAndTaskLaunched)
+ {
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   master::Flags masterFlags = this->CreateMasterFlags();
+   masterFlags.allocation_interval = Milliseconds(50);
+@@ -1141,7 +1141,7 @@ TYPED_TEST(MasterAllocatorTest, MemoryOnlyOfferedAndTaskLaunched)
+ {
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   master::Flags masterFlags = this->CreateMasterFlags();
+   masterFlags.allocation_interval = Milliseconds(50);
+@@ -1341,7 +1341,7 @@ TYPED_TEST(MasterAllocatorTest, Whitelist)
+ 
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Future<Nothing> updateWhitelist1;
+   EXPECT_CALL(allocator, updateWhitelist(Option<hashset<string>>(hosts)))
+@@ -1380,7 +1380,7 @@ TYPED_TEST(MasterAllocatorTest, RoleTest)
+ {
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   master::Flags masterFlags = this->CreateMasterFlags();
+   masterFlags.roles = Some("role2");
+@@ -1475,7 +1475,7 @@ TYPED_TEST(MasterAllocatorTest, FrameworkReregistersFirst)
+   {
+     TestAllocator<TypeParam> allocator;
+ 
+-    EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++    EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+     Try<Owned<cluster::Master>> master = this->StartMaster(
+         &allocator, masterFlags);
+@@ -1533,7 +1533,7 @@ TYPED_TEST(MasterAllocatorTest, FrameworkReregistersFirst)
+   {
+     TestAllocator<TypeParam> allocator2;
+ 
+-    EXPECT_CALL(allocator2, initialize(_, _, _, _, _, _, _));
++    EXPECT_CALL(allocator2, initialize(_, _, _, _, _, _, _, _));
+ 
+     Future<Nothing> addFramework;
+     EXPECT_CALL(allocator2, addFramework(_, _, _, _, _))
+@@ -1601,7 +1601,7 @@ TYPED_TEST(MasterAllocatorTest, SlaveReregistersFirst)
+   {
+     TestAllocator<TypeParam> allocator;
+ 
+-    EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++    EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+     Try<Owned<cluster::Master>> master = this->StartMaster(&allocator);
+     ASSERT_SOME(master);
+@@ -1657,7 +1657,7 @@ TYPED_TEST(MasterAllocatorTest, SlaveReregistersFirst)
+   {
+     TestAllocator<TypeParam> allocator2;
+ 
+-    EXPECT_CALL(allocator2, initialize(_, _, _, _, _, _, _));
++    EXPECT_CALL(allocator2, initialize(_, _, _, _, _, _, _, _));
+ 
+     Future<Nothing> addSlave;
+     EXPECT_CALL(allocator2, addSlave(_, _, _, _, _, _))
+@@ -1724,7 +1724,7 @@ TYPED_TEST(MasterAllocatorTest, RebalancedForUpdatedWeights)
+ 
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   // Start Mesos master.
+   master::Flags masterFlags = this->CreateMasterFlags();
+@@ -1917,7 +1917,7 @@ TYPED_TEST(MasterAllocatorTest, NestedRoles)
+ 
+   TestAllocator<TypeParam> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   master::Flags masterFlags = this->CreateMasterFlags();
+   Try<Owned<cluster::Master>> master =
+diff --git a/src/tests/master_quota_tests.cpp b/src/tests/master_quota_tests.cpp
+index e49e5cccd..320f3db51 100644
+--- a/src/tests/master_quota_tests.cpp
++++ b/src/tests/master_quota_tests.cpp
+@@ -424,7 +424,7 @@ TEST_F(MasterQuotaTest, SetExistingQuota)
+ TEST_F(MasterQuotaTest, RemoveSingleQuota)
+ {
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -588,7 +588,7 @@ TEST_F(MasterQuotaTest, Status)
+ TEST_F(MasterQuotaTest, InsufficientResourcesSingleAgent)
+ {
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -648,7 +648,7 @@ TEST_F(MasterQuotaTest, InsufficientResourcesSingleAgent)
+ TEST_F(MasterQuotaTest, InsufficientResourcesMultipleAgents)
+ {
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -723,7 +723,7 @@ TEST_F(MasterQuotaTest, InsufficientResourcesMultipleAgents)
+ TEST_F(MasterQuotaTest, AvailableResourcesSingleAgent)
+ {
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -773,7 +773,7 @@ TEST_F(MasterQuotaTest, AvailableResourcesSingleAgent)
+ TEST_F(MasterQuotaTest, AvailableResourcesMultipleAgents)
+ {
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -842,7 +842,7 @@ TEST_F(MasterQuotaTest, AvailableResourcesMultipleAgents)
+ TEST_F(MasterQuotaTest, AvailableResourcesAfterRescinding)
+ {
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator);
+   ASSERT_SOME(master);
+@@ -1077,7 +1077,7 @@ TEST_F(MasterQuotaTest, RecoverQuotaEmptyCluster)
+   }
+ 
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   // Restart the master; configured quota should be recovered from the registry.
+   master->reset();
+@@ -1110,7 +1110,7 @@ TEST_F(MasterQuotaTest, RecoverQuotaEmptyCluster)
+ TEST_F(MasterQuotaTest, NoAuthenticationNoAuthorization)
+ {
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   // Disable http_readwrite authentication and authorization.
+   // TODO(alexr): Setting master `--acls` flag to `ACLs()` or `None()` seems
+@@ -1216,7 +1216,7 @@ TEST_F(MasterQuotaTest, UnauthenticatedQuotaRequest)
+ TEST_F(MasterQuotaTest, AuthorizeGetUpdateQuotaRequests)
+ {
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   // Setup ACLs so that only the default principal can modify quotas
+   // for `ROLE1` and read status.
+@@ -1764,7 +1764,7 @@ TEST_F(MasterQuotaTest, DISABLED_ChildRoleDeleteParentQuota)
+ TEST_F(MasterQuotaTest, DISABLED_ClusterCapacityWithNestedRoles)
+ {
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator);
+   ASSERT_SOME(master);
+diff --git a/src/tests/reservation_tests.cpp b/src/tests/reservation_tests.cpp
+index eabcaebff..47c9b4f40 100644
+--- a/src/tests/reservation_tests.cpp
++++ b/src/tests/reservation_tests.cpp
+@@ -655,7 +655,7 @@ TEST_P(ReservationTest, DropReserveTooLarge)
+   masterFlags.allocation_interval = Milliseconds(5);
+   masterFlags.roles = frameworkInfo.roles(0);
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator, masterFlags);
+   ASSERT_SOME(master);
+@@ -2160,7 +2160,7 @@ TEST_P(ReservationTest, DropReserveWithDifferentRole)
+   masterFlags.allocation_interval = Milliseconds(5);
+ 
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator, masterFlags);
+   ASSERT_SOME(master);
+@@ -2261,7 +2261,7 @@ TEST_P(ReservationTest, PreventUnreservingAlienResources)
+   masterFlags.allocation_interval = Milliseconds(5);
+ 
+   TestAllocator<> allocator;
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator, masterFlags);
+   ASSERT_SOME(master);
+diff --git a/src/tests/resource_offers_tests.cpp b/src/tests/resource_offers_tests.cpp
+index 6b1e494aa..b0492af7c 100644
+--- a/src/tests/resource_offers_tests.cpp
++++ b/src/tests/resource_offers_tests.cpp
+@@ -284,7 +284,7 @@ TEST_F(ResourceOffersTest, Request)
+ {
+   TestAllocator<master::allocator::HierarchicalDRFAllocator> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = StartMaster(&allocator);
+   ASSERT_SOME(master);
+diff --git a/src/tests/slave_recovery_tests.cpp b/src/tests/slave_recovery_tests.cpp
+index d012d396a..348ad492f 100644
+--- a/src/tests/slave_recovery_tests.cpp
++++ b/src/tests/slave_recovery_tests.cpp
+@@ -3704,7 +3704,7 @@ TYPED_TEST(SlaveRecoveryTest, ReconcileTasksMissingFromSlave)
+ {
+   TestAllocator<master::allocator::HierarchicalDRFAllocator> allocator;
+ 
+-  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _));
++  EXPECT_CALL(allocator, initialize(_, _, _, _, _, _, _, _));
+ 
+   Try<Owned<cluster::Master>> master = this->StartMaster(&allocator);
+   ASSERT_SOME(master);
+-- 
+2.14.3
+
