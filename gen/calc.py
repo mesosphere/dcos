@@ -729,6 +729,8 @@ def calculate__superuser_credentials_given(
         superuser_service_account_uid, superuser_service_account_public_key):
     pair = (superuser_service_account_uid, superuser_service_account_public_key)
 
+    import pdb; pdb.set_trace()
+
     if all(pair):
         return 'true'
 

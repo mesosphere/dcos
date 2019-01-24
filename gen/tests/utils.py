@@ -41,7 +41,9 @@ def make_arguments(new_arguments):
 
 
 def validate_error(new_arguments, key, message, unset=None):
-    assert gen.validate(arguments=make_arguments(new_arguments)) == {
+    arguments = make_arguments(new_arguments)
+    validate_result = gen.validate(arguments=arguments)
+    assert validate_result == {
         'status': 'errors',
         'errors': {key: {'message': message}},
         'unset': set() if unset is None else unset,
