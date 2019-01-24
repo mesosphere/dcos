@@ -749,6 +749,8 @@ class Resolver:
         assert not self._resolved, "Resolvers should only be resolved once"
         self._resolved = True
 
+        import pdb; pdb.set_trace()
+
         for target in self._targets:
             self._calculate_target(target)
 
@@ -829,12 +831,16 @@ def resolve_configuration(sources: List[Source], targets: List[Target]):
     # Merge all the seters and validate function into one uber list
     setters = copy.deepcopy(user_config.setters)
     validate = copy.deepcopy(user_config.validate)
+    import pdb; pdb.set_trace()
+
     for source in sources:
         for name, setter_list in source.setters.items():
             # TODO(cmaloney): Make a setter manager already...
             setters.setdefault(name, list())
             setters[name] += setter_list
         validate += source.validate
+
+    import pdb; pdb.set_trace()
 
     # Use setters to calculate every required parameter
     resolver = Resolver(setters, validate, targets)

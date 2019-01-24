@@ -42,6 +42,7 @@ def make_arguments(new_arguments):
 
 def validate_error(new_arguments, key, message, unset=None):
     arguments = make_arguments(new_arguments)
+    import pdb; pdb.set_trace()
     validate_result = gen.validate(arguments=arguments)
     assert validate_result == {
         'status': 'errors',
