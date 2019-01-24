@@ -58,40 +58,6 @@ class TestServiceAccount:
     Tests for `superuser_service_account_uid/public_key` config parameters.
     """
 
-    def test_superuser_service_account_invalid_public_key(
-            self,
-            docker_backend: ClusterBackend,
-            artifact_path: Path,
-            request: SubRequest,
-            log_dir: Path,
-    ) -> None:
-        """
-        Tests for error message when supplying an invalid public
-        key as the `superuser_service_account_public_key`.
-        """
-        config = {
-            'superuser_service_account_uid': str(uuid.uuid4()),
-            'superuser_service_account_public_key': str(uuid.uuid4()),
-        }
-        with Cluster(cluster_backend=docker_backend) as cluster:
-            with pytest.raises(CalledProcessError) as exc:
-                cluster.install_dcos_from_path(
-                    dcos_installer=artifact_path,
-                    dcos_config={
-                        **cluster.base_config,
-                        **config,
-                    },
-                    output=Output.LOG_AND_CAPTURE,
-                    ip_detect_path=docker_backend.ip_detect_path,
-                )
-            message = (
-                '_superuser_service_account_public_key_json: '
-                'superuser_service_account_public_key has an invalid value. It '
-                'must hold an RSA public key encoded in the OpenSSL PEM '
-                'format. Error: Could not deserialize key data.'
-            )
-            assert message in str(exc.value.stdout)
-
     def test_superuser_service_account_login(
             self,
             docker_backend: ClusterBackend,
@@ -109,7 +75,11 @@ class TestServiceAccount:
             'superuser_service_account_uid': superuser_uid,
             'superuser_service_account_public_key': superuser_public_key,
         }
-        with Cluster(cluster_backend=docker_backend) as cluster:
+        with Cluster(
+            cluster_backend=docker_backend,
+            agents=0,
+            public_agents=0,
+        ) as cluster:
             cluster.install_dcos_from_path(
                 dcos_installer=artifact_path,
                 dcos_config={
