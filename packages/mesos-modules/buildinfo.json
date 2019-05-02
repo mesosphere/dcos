@@ -5,8 +5,8 @@
   ],
   "single_source": {
     "kind": "git",
-    "git": "https://github.com/dcos/dcos-mesos-modules.git",
-    "ref": "2633cb7135c978f640d08819f2408c541d6dedb2",
-    "ref_origin": "1.13"
+    "git": "https://github.com/gkleiman/dcos-mesos-modules.git",
+    "ref": "ee89845c33aab7bb8964e12b46be0ceda57b11c2",
+    "ref_origin": "perf-improvement-fix"
   }
 }
