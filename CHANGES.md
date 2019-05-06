@@ -85,6 +85,13 @@ No breaking changes are known to date.
 * Telegraf's procstat input plugin reports process metrics. (DCOS-50778)
 
 * Telegraf has been upgraded to 1.9.4. (DCOS_OSS-4675)
+* CNAME records should appear before A/AAAA records (DCOS_OSS-5108)
+
+* ipset mgr crash looping on kernel with ipset ver. 7 (DCOS_OSS-5080)
+
+* ipset protocol ignores a missing `match` flag on some kernel versions (DCOS-52780)
+
+### Notable changes
 
 * Allow the DC/OS installer to be used when there is a space in its path. (DCOS_OSS-4429)
 
