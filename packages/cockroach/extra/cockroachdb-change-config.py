@@ -20,32 +20,6 @@ log = logging.getLogger(__name__)
 logging.basicConfig(format='[%(levelname)s] %(message)s', level='INFO')
 
 
-def set_cluster_version(my_internal_ip: str, version: str) -> None:
-    """
-    Use `cockroach sql` to set the cluster-wide configuration setting
-    version to `version`. This requires that all nodes are running the
-    given version of CockroachDB and are operating successfully.
-
-    Relevant JIRA ticket: https://jira.mesosphere.com/browse/DCOS-19427
-
-    Args:
-        my_internal_ip: The internal IP of the current host.
-        version: The current 'major.minor' version of CockroachDB.
-    """
-    command = [
-        '/opt/mesosphere/active/cockroach/bin/cockroach',
-        'sql',
-        '--insecure',
-        '--host={}'.format(my_internal_ip),
-        '-e',
-        "SET CLUSTER SETTING version = '{}';".format(version),
-        ]
-    config_text = 'version: {}'.format(version)
-    log.info('Set `%s` via command `%s`', config_text, ' '.join(command))
-    subprocess.run(command, input=config_text.encode('ascii'))
-    log.info('Command returned')
-
-
 def set_num_replicas(my_internal_ip: str, num_replicas: int) -> None:
     """
     Use `cockroach zone set` to set the cluster-wide configuration setting
@@ -106,9 +80,6 @@ def main() -> None:
     log.info('Expected number of DC/OS master nodes: %s', master_node_count)
 
     set_num_replicas(my_internal_ip, master_node_count)
-
-    # We are running CockroachDB v2.0.x so pass '2.0'.
-    set_cluster_version(my_internal_ip, '2.0')
 
 
 if __name__ == '__main__':

@@ -7,7 +7,7 @@ apt-get -y update
 apt-get -y install apt-transport-https software-properties-common
 
 # CockroachDB requires node and yarn to build UI
-# https://github.com/cockroachdb/cockroach/blob/v2.0.7/build/bootstrap/bootstrap-debian.sh#L8-L12
+# https://github.com/cockroachdb/cockroach/blob/v2.1.7/build/bootstrap/bootstrap-debian.sh#L8-L12
 curl -fsSL https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add -
 echo "deb https://deb.nodesource.com/node_6.x xenial main" | tee /etc/apt/sources.list.d/nodesource.list
 
