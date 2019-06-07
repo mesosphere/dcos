@@ -30,27 +30,47 @@ def set_num_replicas(my_internal_ip: str, num_replicas: int) -> None:
     via stdin.
 
     Relevant JIRA ticket: https://jira.mesosphere.com/browse/DCOS-20352
+
+    Display `num_replicas` that have to be changed by using the SQL command:
+    `SHOW ALL ZONE CONFIGURATIONS;` in CockroachDB.
     """
 
-    def _set_replicas_for_zone(zone: str) -> None:
-        command = [
-            '/opt/mesosphere/active/cockroach/bin/cockroach',
-            'zone',
-            'set',
-            zone,
-            '--insecure',
-            '--host={}'.format(my_internal_ip),
-            '-f',
-            '-'
-            ]
-        config_text = 'num_replicas: %s' % (num_replicas, )
-        log.info('Set `%s` via command `%s`', config_text, ' '.join(command))
-        subprocess.run(command, input=config_text.encode('ascii'))
+    def _set_replicas_for_zone(zone: str, db_entity: str) -> None:
+        zone_config = 'num_replicas = {}'.format(num_replicas)
+        sql_command = (
+            'ALTER {db_entity} CONFIGURE ZONE USING {zone_config};'
+        ).format(
+            db_entity=db_entity,
+            zone_config=zone_config,
+        )
+        command = (
+            '/opt/mesosphere/active/cockroach/bin/cockroach '
+            'sql -e "{sql_command}" --insecure --host={host}'
+        ).format(
+            sql_command=sql_command,
+            host=my_internal_ip,
+        )
+        message = (
+            'Set {zone_config} for {zone} via command {command}'
+        ).format(
+            zone_config=zone_config,
+            zone=zone,
+            command=command,
+        )
+        log.info(message)
+        subprocess.run(command, shell=True)
         log.info('Command returned')
 
-    zones = ['.default', '.liveness', '.meta']
-    for zone in zones:
-        _set_replicas_for_zone(zone=zone)
+    zone_database_entities = [
+        ('.default', 'RANGE default'),
+        ('system', 'DATABASE system'),
+        ('system.jobs', 'TABLE system.public.jobs'),
+        ('.meta', 'RANGE meta'),
+        ('.system', 'RANGE system'),
+        ('.liveness', 'RANGE liveness'),
+    ]
+    for zone, db_entity in zone_database_entities:
+        _set_replicas_for_zone(zone=zone, db_entity=db_entity)
 
 
 def get_expected_master_node_count() -> int:
