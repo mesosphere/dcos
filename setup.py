@@ -48,8 +48,7 @@ setup(
         'pkgpanda.build',
         'pkgpanda.http',
         'release',
-        'release.storage',
-        'ssh'],
+        'release.storage'],
     install_requires=[
         # DCOS-21656 - `botocore`` requires less than 2.7.0 while
         # `analytics-python` package installs 2.7.0 version
@@ -59,7 +58,7 @@ setup(
         'coloredlogs',
         'Flask',
         'flask-compress',
-        'urllib3==1.24.1',
+        'urllib3==1.24.2',
         'chardet',
         'PyJWT',
         # Pins taken from 'azure==2.0.0rc4'

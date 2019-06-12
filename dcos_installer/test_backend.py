@@ -27,27 +27,6 @@ def test_password_hash():
     assert passlib.hash.sha512_crypt.verify(password, hash_pw), 'Hash does not match password'
 
 
-def test_set_superuser_password(tmpdir):
-    """Test that --set-superuser-hash works"""
-
-    with tmpdir.as_cwd():
-        tmpdir.join('genconf').ensure(dir=True)
-
-        # TODO(cmaloney): Add tests for the behavior around a non-existent config.yaml
-
-        # Setting in a non-empty config.yaml which has no password set
-        make_default_config_if_needed('genconf/config.yaml')
-        assert 'superuser_password_hash' not in Config('genconf/config.yaml').config
-
-        # Set the password
-        create_fake_build_artifacts(tmpdir)
-        subprocess.check_call(['dcos_installer', '--set-superuser-password', 'foo'], cwd=str(tmpdir))
-
-        # Check that config.yaml has the password set
-        config = Config('genconf/config.yaml')
-        assert passlib.hash.sha512_crypt.verify('foo', config['superuser_password_hash'])
-
-
 # TODO: DCOS_OSS-3473 - muted Windows tests requiring investigation
 @pytest.mark.skipif(pkgpanda.util.is_windows, reason="test fails on Windows reason unknown")
 def test_generate_node_upgrade_script(tmpdir, monkeypatch):
@@ -60,7 +39,6 @@ exhibitor_storage_backend: 'static'
 resolvers:
 - 8.8.8.8
 - 8.8.4.4
-ssh_port: 22
 process_timeout: 10000
 bootstrap_url: file:///opt/dcos_install_tmp
 master_list: ['10.0.0.1', '10.0.0.2', '10.0.0.5']
@@ -86,65 +64,9 @@ def test_version(monkeypatch):
     monkeypatch.setenv('BOOTSTRAP_VARIANT', 'some-variant')
     version_data = subprocess.check_output(['dcos_installer', '--version']).decode()
     assert json.loads(version_data) == {
-        'version': '1.13.0-alpha',
+        'version': '1.14.0-dev',
         'variant': 'some-variant'
     }
-
-
-def test_good_create_config_from_post(tmpdir):
-    """
-    Test that it creates the config
-    """
-    # Create a temp config
-    workspace = tmpdir.strpath
-    temp_config_path = workspace + '/config.yaml'
-    make_default_config_if_needed(temp_config_path)
-
-    temp_ip_detect_path = workspace + '/ip-detect'
-    f = open(temp_ip_detect_path, "w")
-    f.write("#/bin/bash foo")
-
-    good_post_data = {
-        "agent_list": ["10.0.0.2"],
-        "master_list": ["10.0.0.1"],
-        "cluster_name": "Good Test",
-        "resolvers": ["4.4.4.4"],
-        "ip_detect_filename": temp_ip_detect_path
-    }
-    expected_good_messages = {}
-
-    create_fake_build_artifacts(tmpdir)
-    with tmpdir.as_cwd():
-        messages = backend.create_config_from_post(
-            post_data=good_post_data,
-            config_path=temp_config_path)
-
-    assert messages == expected_good_messages
-
-
-def test_bad_create_config_from_post(tmpdir):
-    # Create a temp config
-    workspace = tmpdir.strpath
-    temp_config_path = workspace + '/config.yaml'
-    make_default_config_if_needed(temp_config_path)
-
-    bad_post_data = {
-        "agent_list": "foo",
-        "master_list": ["foo"],
-    }
-    expected_bad_messages = {
-        "agent_list": "Must be a JSON formatted list, but couldn't be parsed the given value `foo` as "
-                      "one because of: Expecting value: line 1 column 1 (char 0)",
-        "master_list": 'Invalid IPv4 addresses in list: foo',
-    }
-
-    create_fake_build_artifacts(tmpdir)
-    with tmpdir.as_cwd():
-        messages = backend.create_config_from_post(
-            post_data=bad_post_data,
-            config_path=temp_config_path)
-
-    assert messages == expected_bad_messages
 
 
 @pytest.mark.skipif(pkgpanda.util.is_windows, reason="Code tests linux configuration")
@@ -163,10 +85,9 @@ def test_do_validate_config(tmpdir, monkeypatch):
     expected_output = {
         'ip_detect_contents': 'ip-detect script `genconf/ip-detect` must exist',
         'master_list': 'Must set master_list, no way to calculate value.',
-        'ssh_key_path': 'could not find ssh private key: genconf/ssh_key'
     }
     with tmpdir.as_cwd():
-        assert Config(config_path='genconf/config.yaml').do_validate(include_ssh=True) == expected_output
+        assert Config(config_path='genconf/config.yaml').do_validate() == expected_output
 
 
 def test_get_config(tmpdir):
@@ -178,7 +99,6 @@ def test_get_config(tmpdir):
         'master_discovery': 'static',
         'exhibitor_storage_backend': 'static',
         'resolvers': ['8.8.8.8', '8.8.4.4'],
-        'ssh_port': 22,
         'process_timeout': 10000,
         'bootstrap_url': 'file:///opt/dcos_install_tmp'
     }
@@ -224,20 +144,6 @@ def test_success():
     assert code == 200
     assert bad_out == expected_output_bad
     assert bad_code == 400
-
-
-def test_accept_overrides_for_undefined_config_params(tmpdir):
-    temp_config_path = tmpdir.strpath + '/config.yaml'
-    param = ('fake_test_param_name', 'fake_test_param_value')
-    make_default_config_if_needed(temp_config_path)
-    create_fake_build_artifacts(tmpdir)
-    with tmpdir.as_cwd():
-        messages = backend.create_config_from_post(
-            post_data=dict([param]),
-            config_path=temp_config_path)
-
-    assert not messages, "unexpected validation error: {}".format(messages)
-    assert Config(config_path=temp_config_path)[param[0]] == param[1]
 
 
 simple_full_config = """---

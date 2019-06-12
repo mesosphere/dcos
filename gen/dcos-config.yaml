@@ -2275,16 +2275,29 @@ package:
       [[inputs.net]]
       # Get the number of processes and group them by status
       [[inputs.processes]]
-      # Gather resource usage of processes
-      [[inputs.procstat]]
-        pattern = "."
-        pid_finder = "pgrep"
       # Read metrics about system load & uptime
       [[inputs.system]]
       # Collect statistics about itself
       [[inputs.internal]]
         ## If true, collect telegraf memory stats.
         collect_memstats = true
+      # The following procstat inputs collect process resource metrics for components that run on all cluster nodes.
+      [[inputs.procstat]]
+        systemd_unit = "dcos-checks-api.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-checks-poststart.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-diagnostics.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-fluent-bit.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-net-watchdog.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-net.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-pkgpanda-api.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-telegraf.service"
       # Configuration for the Prometheus client to spawn
       [[outputs.prometheus_client]]
         ## Address to listen on
@@ -2330,6 +2343,15 @@ package:
         ## Apply DC/OS component name tag according to the documentation.
         [inputs.prometheus.tags]
           dcos-component-name = "DC/OS Net"
+      # Read metrics from Fluent Bit Prometheus endpoint
+      [[inputs.prometheus]]
+        ## An array of urls to scrape metrics from.
+        urls = ["http://127.0.0.1:62020/api/v1/metrics/prometheus"]
+        ## Specify timeout duration for slower prometheus clients (default is 3s)
+        response_timeout = "30s"
+        ## Apply DC/OS component name tag according to the documentation.
+        [inputs.prometheus.tags]
+          dcos-component-name = "DC/OS Fluent Bit"
       # Transform Admin Router metrics from the Nginx VTS module
       [[processors.nginx_vts_filter]]
         [[processors.nginx_vts_filter.convert]]
@@ -2347,6 +2369,37 @@ package:
   - path: /etc_master/telegraf/telegraf.d/master.conf
     content: |
       # Additional Telegraf config for masters
+      # The following procstat inputs collect process resource metrics for components that run on masters.
+      [[inputs.procstat]]
+        systemd_unit = "dcos-adminrouter.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-bouncer.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-cockroach.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-cockroachdb-config-change.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-cosmos.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-exhibitor.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-history.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-log-master.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-logrotate-master.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-marathon.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-mesos-dns.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-mesos-master.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-metronome.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-signal.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-ui-update-service.service"
 {% switch enable_mesos_input_plugin %}
 {% case "true" %}
       # Telegraf plugin for gathering metrics from mesos
@@ -2503,6 +2556,23 @@ package:
   - path: /etc_slave/telegraf/telegraf.d/agent.conf
     content: |
       # Additional Telegraf config for agents
+      # The following procstat inputs collect process resource metrics for components that run on agents.
+      [[inputs.procstat]]
+        systemd_unit = "dcos-adminrouter-agent.service"
+{% switch enable_docker_gc %}
+{% case "true" %}
+      [[inputs.procstat]]
+        systemd_unit = "dcos-docker-gc.service"
+{% case "false" %}
+{% endswitch %}
+      [[inputs.procstat]]
+        systemd_unit = "dcos-log-agent.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-logrotate-agent.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-mesos-slave.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-rexray.service"
       # Plugin for monitoring mesos container resource consumption
       [[inputs.dcos_containers]]
         ## The interval at which to collect metrics
@@ -2578,24 +2648,22 @@ package:
         ## calculation of percentiles. Raising this limit increases the accuracy
         ## of percentiles but also increases the memory usage and cpu time.
         percentile_limit = 1000
-      # Read metrics from Admin Router Nginx Prometheus endpoint.
+      # Read metrics from Prometheus endpoints provided by Mesos tasks.
       [[inputs.prometheus]]
         ## The URL of the local mesos agent
         mesos_agent_url = "http://$DCOS_NODE_PRIVATE_IP:{{ mesos_agent_port }}"
         ## The period after which requests to mesos agent should time out
         mesos_timeout = "10s"
+        ## Specify timeout duration for slower prometheus clients (default is 3s)
+        response_timeout = "10s"
         ## The user agent to send with requests
         user_agent = "Telegraf-prometheus"
+      # Read metrics from Admin Router Nginx Prometheus endpoint.
+      [[inputs.prometheus]]
         ## An array of urls to scrape metrics from.
         urls = ["http://127.0.0.1:61001/nginx/metrics"]
         ## Specify timeout duration for slower prometheus clients (default is 3s)
         response_timeout = "10s"
-        ## Optional TLS Config
-        # tls_ca = /path/to/cafile
-        # tls_cert = /path/to/certfile
-        # tls_key = /path/to/keyfile
-        ## Use TLS but skip chain & host verification
-        # insecure_skip_verify = true
         ## Drop unused Admin Router metrics from the Nginx VTS module
         namedrop = ["nginx_vts_filter_cache_*", "nginx_vts_server_*", "nginx_vts_upstream_*", "nginx_vts_*_request_seconds*"]
         [inputs.prometheus.tagdrop]
@@ -2603,6 +2671,7 @@ package:
         ## Apply DC/OS component name tag according to the documentation.
         [inputs.prometheus.tags]
           dcos-component-name = "Admin Router Agent"
+        user_agent = "Telegraf-prometheus"
       # Read metrics from DC/OS Diagnostics Prometheus endpoint.
       [[inputs.prometheus]]
         ## An array of urls to scrape metrics from.
@@ -2638,6 +2707,23 @@ package:
   - path: /etc_slave_public/telegraf/telegraf.d/agent.conf
     content: |
       # Additional Telegraf config for agents
+      # The following procstat inputs collect process resource metrics for components that run on agents.
+      [[inputs.procstat]]
+        systemd_unit = "dcos-adminrouter-agent.service"
+{% switch enable_docker_gc %}
+{% case "true" %}
+      [[inputs.procstat]]
+        systemd_unit = "dcos-docker-gc.service"
+{% case "false" %}
+{% endswitch %}
+      [[inputs.procstat]]
+        systemd_unit = "dcos-log-agent.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-logrotate-agent.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-mesos-slave.service"
+      [[inputs.procstat]]
+        systemd_unit = "dcos-rexray.service"
       # Plugin for monitoring mesos container resource consumption
       [[inputs.dcos_containers]]
         ## The interval at which to collect metrics
@@ -2711,25 +2797,22 @@ package:
         ## calculation of percentiles. Raising this limit increases the accuracy
         ## of percentiles but also increases the memory usage and cpu time.
         percentile_limit = 1000
-      # Read metrics from Admin Router Nginx Prometheus endpoint.
+      # Read metrics from Prometheus endpoints provided by Mesos tasks.
       [[inputs.prometheus]]
         ## The URL of the local mesos agent
         mesos_agent_url = "http://$DCOS_NODE_PRIVATE_IP:{{ mesos_agent_port }}"
         ## The period after which requests to mesos agent should time out
         mesos_timeout = "10s"
+        ## Specify timeout duration for slower prometheus clients (default is 3s)
+        response_timeout = "10s"
         ## The user agent to send with requests
         user_agent = "Telegraf-prometheus"
-
+      # Read metrics from Admin Router Nginx Prometheus endpoint.
+      [[inputs.prometheus]]
         ## An array of urls to scrape metrics from.
         urls = ["http://127.0.0.1:61001/nginx/metrics"]
         ## Specify timeout duration for slower prometheus clients (default is 3s)
         response_timeout = "10s"
-        ## Optional TLS Config
-        # tls_ca = /path/to/cafile
-        # tls_cert = /path/to/certfile
-        # tls_key = /path/to/keyfile
-        ## Use TLS but skip chain & host verification
-        # insecure_skip_verify = true
         ## Drop unused Admin Router metrics from the Nginx VTS module
         namedrop = ["nginx_vts_filter_cache_*", "nginx_vts_server_*", "nginx_vts_upstream_*", "nginx_vts_*_request_seconds*"]
         [inputs.prometheus.tagdrop]
@@ -2737,7 +2820,7 @@ package:
         ## Apply DC/OS component name tag according to the documentation.
         [inputs.prometheus.tags]
           dcos-component-name = "Admin Router Agent"
-      # Plugin for adding metadata to dcos-specific metrics
+        user_agent = "Telegraf-prometheus"
       # Read metrics from DC/OS Diagnostics Prometheus endpoint.
       [[inputs.prometheus]]
         ## An array of urls to scrape metrics from.
@@ -2745,6 +2828,7 @@ package:
         ## Apply DC/OS component name tag according to the documentation.
         [inputs.prometheus.tags]
           dcos-component-name = "DC/OS Diagnostics"
+      # Plugin for adding metadata to dcos-specific metrics
       [[processors.dcos_metadata]]
         ## The URL of the local mesos agent
         mesos_agent_url = "http://$DCOS_NODE_PRIVATE_IP:{{ mesos_agent_port }}"

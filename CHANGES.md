@@ -1,29 +1,28 @@
-## DC/OS 1.14.0
+Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos/dcos/wiki/CHANGES.md-guidelines). Thank you!
 
-```
-* For any significant improvement to DC/OS add an entry to Fixed and Improved section.
-* For Security updates, please call out in Security updates section.
-* Add to the top of the existing list.
-* External Projects like Mesos and Marathon shall provide a link to their published changelogs.
 
-Format of the entries must be.
+## DC/OS 1.14.0 (in development)
 
-* Entry with no-newlines. (DCOS_OSS_JIRA)
-<new-line>
-* Entry two with no-newlines. (DCOS_OSS_JIRA_2)
-```
 
-### Highlights
+### What's new
 
-#### What's new
+* The DC/OS configuration variable `mesos_seccomp_enabled` now defaults to `true`, with `mesos_seccomp_profile_name` set to `default.json`. This is not expected to break tasks. If you experience problems, though, please note that seccomp can be disabled for individual tasks through the DC/OS SDK and Marathon. (DCOS-50038)
 
-#### Breaking changes
+* Updated ref of dvdcli to fix dvdcli package build (DCOS-53581)
 
-#### Known limitations
+* Updated DC/OS UI to [master+v2.108.0](https://github.com/dcos/dcos-ui/releases/tag/master+v2.108.0)
 
-#### Fixed and improved
+### Breaking changes
 
-* DC/OS Diagnostics now applies timeouts when reading systemd journal entries. The timeout that's applied is configured via the `command-exec-timeout` configuration parameter.
-* `docker-gc` now removes unused volumes (DCOS_OSS-1502)
+Admin Router now requires a CPU with SSE4.2 support.
 
-* Use gzip compression for some UI assets (DCOS-5978)
+The following parameters have been removed from the DC/OS installer:
+
+* --set-superuser-password
+* --offline
+* --cli-telemetry-disabled
+* --validate-config
+* --preflight
+* --install-prereqs
+* --deploy
+* --postflight
