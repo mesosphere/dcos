@@ -32,6 +32,7 @@ class TestUpgradeTests:
                 *cluster.public_agents,
             }:
                 build = node.dcos_build_info()
+                assert build.version.startswith(artifact_url.split('/')[-2])
                 # assert build.version.startswith('1.12')
                 assert build.variant == DCOSVariant.OSS
 
@@ -49,5 +50,6 @@ class TestUpgradeTests:
                 *cluster.public_agents,
             }:
                 build = node.dcos_build_info()
+                assert build.version.startswith(upgrade_artifact_url.split('/')[-2])
                 # assert build.version.startswith('1.13')
                 assert build.variant == DCOSVariant.OSS
