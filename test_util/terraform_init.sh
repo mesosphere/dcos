@@ -71,10 +71,15 @@ fetch "$URL_terraform_provider_aws" "$CHECKSUM_terraform_provider_aws"
 
 if [ ! -f ./id_rsa ]; then
     ssh-keygen -t rsa -f id_rsa
+    cat id_rsa
 fi
 
 if [ -f main.tf ]; then
-    ./terraform init
+    for _ in $(seq 1 10); do
+        ./terraform init && break
+        echo "Terraform init failed Retrying.."
+        sleep 2
+    done
 else
     echo -e "Download your main.tf file either from your build's artifacts or follow the DC/OS documentation to create one: https://docs.mesosphere.com/1.13/installing/evaluation/aws/#creating-a-dcos-cluster\n"
     echo -e "Once you have done that, run:\n\n  ./terraform init\n"

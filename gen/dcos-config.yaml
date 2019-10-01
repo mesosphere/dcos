@@ -1388,6 +1388,13 @@ package:
       MESOS_SECCOMP_PROFILE_NAME={{ mesos_seccomp_profile_name }}
 {% case "false" %}
 {% endswitch %}
+      MESOS_DOCKER_VOLUME_CHOWN={{ mesos_docker_volume_chown }}
+      MESOS_DISALLOW_SHARING_AGENT_IPC_NAMESPACE={{ mesos_disallow_sharing_agent_ipc_namespace }}
+{% switch has_mesos_default_container_shm_size %}
+{% case "true" %}
+      MESOS_DEFAULT_CONTAINER_SHM_SIZE={{ mesos_default_container_shm_size }}
+{% case "false" %}
+{% endswitch %}
       MESOS_SLAVE_SUBSYSTEMS=cpu,memory
       MESOS_WORK_DIR={{ mesos_agent_work_dir }}
 {% switch use_mesos_hooks %}
@@ -1698,6 +1705,11 @@ package:
                   "Role": ["agent", "agent_public"]
               },
               {
+                  "Port": {{ mesos_agent_port }},
+                  "Uri": "/containerizer/debug",
+                  "Role": ["agent", "agent_public"]
+              },
+              {
                   "Port": {{ metronome_port }},
                   "Uri": "/v1/jobs",
                   "Role": ["master"]
@@ -1774,6 +1786,11 @@ package:
                   "Location": "{{ mesos_master_log_file }}.3.gz",
                   "Role": ["master"],
                   "Optional": true
+              },
+              {
+                  "Location": "/var/log/mesos-state.tar.gz",
+                  "Role": ["master"],
+                  "Optional": true
               }
           ],
           "LocalCommands": [
@@ -1805,7 +1822,13 @@ package:
                   "Command": ["/opt/mesosphere/bin/curl", "-s", "-S", "http://localhost:62080/v1/metrics/mesos_listener"]
               },
               {
+                  "Command": ["/opt/mesosphere/bin/curl", "-s", "-S", "http://localhost:62080/v1/metrics/l4lb"]
+              },
+              {
                   "Command": ["/opt/mesosphere/bin/curl", "-s", "-S", "http://localhost:62080/v1/metrics/lashup"]
+              },
+              {
+                  "Command": ["/opt/mesosphere/bin/curl", "-s", "-S", "http://localhost:62080/v1/metrics/overlay"]
               },
               {
                   "Command": ["timedatectl"]
@@ -1942,6 +1965,10 @@ package:
 {% case "aws_s3" %}
   - path: /etc/exhibitor
     content: |
+      EXHIBITOR_TLS_ENABLED={{ exhibitor_tls_enabled }}
+      EXHIBITOR_TLS_REQUIRED={{ exhibitor_tls_required }}
+      EXHIBITOR_BOOTSTRAP_CA_URL={{ exhibitor_bootstrap_ca_url }}
+      BOOTSTRAP_URL={{ bootstrap_url }}
       EXHIBITOR_BACKEND=AWS_S3
       AWS_REGION={{ aws_region }}
       AWS_S3_BUCKET={{ s3_bucket }}
@@ -1957,22 +1984,38 @@ package:
 {% case "shared_filesystem" %}
   - path: /etc/exhibitor
     content: |
+      EXHIBITOR_TLS_ENABLED={{ exhibitor_tls_enabled }}
+      EXHIBITOR_TLS_REQUIRED={{ exhibitor_tls_required }}
+      EXHIBITOR_BOOTSTRAP_CA_URL={{ exhibitor_bootstrap_ca_url }}
+      BOOTSTRAP_URL={{ bootstrap_url }}
       EXHIBITOR_BACKEND=SHARED_FS
       EXHIBITOR_FSCONFIGDIR={{ exhibitor_fs_config_dir }}
 {% case "static" %}
   - path: /etc/exhibitor
     content: |
+      EXHIBITOR_TLS_ENABLED={{ exhibitor_tls_enabled }}
+      EXHIBITOR_TLS_REQUIRED={{ exhibitor_tls_required }}
+      EXHIBITOR_BOOTSTRAP_CA_URL={{ exhibitor_bootstrap_ca_url }}
+      BOOTSTRAP_URL={{ bootstrap_url }}
       EXHIBITOR_BACKEND=STATIC
       EXHIBITOR_STATICENSEMBLE={{ exhibitor_static_ensemble }}
 {% case "zookeeper" %}
   - path: /etc/exhibitor
     content: |
+      EXHIBITOR_TLS_ENABLED={{ exhibitor_tls_enabled }}
+      EXHIBITOR_TLS_REQUIRED={{ exhibitor_tls_required }}
+      EXHIBITOR_BOOTSTRAP_CA_URL={{ exhibitor_bootstrap_ca_url }}
+      BOOTSTRAP_URL={{ bootstrap_url }}
       EXHIBITOR_BACKEND=ZK
       ZK_CONFIG_CONNECT={{ exhibitor_zk_hosts }}
       ZK_CONFIG_ZPATH={{ exhibitor_zk_path }}
 {% case "azure" %}
   - path: /etc/exhibitor
     content: |
+      EXHIBITOR_TLS_ENABLED={{ exhibitor_tls_enabled }}
+      EXHIBITOR_TLS_REQUIRED={{ exhibitor_tls_required }}
+      EXHIBITOR_BOOTSTRAP_CA_URL={{ exhibitor_bootstrap_ca_url }}
+      BOOTSTRAP_URL={{ bootstrap_url }}
       EXHIBITOR_BACKEND=AZURE
       AZURE_CONTAINER=dcos-exhibitor
       AZURE_PREFIX={{ exhibitor_azure_prefix }}
@@ -2019,6 +2062,11 @@ package:
 {% switch has_marathon_gpu_scheduling_behavior %}
 {% case "true" %}
       MARATHON_GPU_SCHEDULING_BEHAVIOR={{ marathon_gpu_scheduling_behavior }}
+{% case "false" %}
+{% endswitch %}
+{% switch has_marathon_new_group_enforce_role %}
+{% case "true" %}
+      MARATHON_NEW_GROUP_ENFORCE_ROLE={{ marathon_new_group_enforce_role }}
 {% case "false" %}
 {% endswitch %}
 
@@ -2348,6 +2396,26 @@ package:
         ## Apply DC/OS component name tag according to the documentation.
         [inputs.prometheus.tags]
           dcos-component-name = "DC/OS Net"
+      # Read metrics from DC/OS Net Prometheus endpoint l4lb registry.
+      [[inputs.prometheus]]
+        ## An array of urls to scrape metrics from.
+        urls = ["http://127.0.0.1:62080/v1/metrics/l4lb"]
+        ## Specify timeout duration for slower prometheus clients (default is 3s)
+        response_timeout = "30s"
+        name_prefix = "l4lb_"
+        ## Apply DC/OS component name tag according to the documentation.
+        [inputs.prometheus.tags]
+          dcos-component-name = "DC/OS Net"
+      # Read metrics from DC/OS Net Prometheus endpoint overlay registry.
+      [[inputs.prometheus]]
+        ## An array of urls to scrape metrics from.
+        urls = ["http://127.0.0.1:62080/v1/metrics/overlay"]
+        ## Specify timeout duration for slower prometheus clients (default is 3s)
+        response_timeout = "30s"
+        name_prefix = "overlay_"
+        ## Apply DC/OS component name tag according to the documentation.
+        [inputs.prometheus.tags]
+          dcos-component-name = "DC/OS Net"
       # Read metrics from Fluent Bit Prometheus endpoint
       [[inputs.prometheus]]
         ## An array of urls to scrape metrics from.
@@ -2423,10 +2491,12 @@ package:
           "frameworks",
           "framework_offers",
           "tasks",
+          "operations",
           "messages",
           "evqueue",
           "registrar",
           "allocator",
+          "overlay",
         ]
         ## The user agent to send with requests
         user_agent = "Telegraf-mesos"
@@ -2528,7 +2598,8 @@ package:
       # Read exhibitor status metrics from HTTP endpoint
       [[inputs.http]]
         name_override = "exhibitor_status"
-        urls = ["http://localhost:{{ exhibitor_port }}/exhibitor/v1/cluster/status"]
+        urls = ["https://127.0.0.1/exhibitor/exhibitor/v1/cluster/status"]
+        insecure_skip_verify = true
         data_format = "json"
         tag_keys = ["hostname"]
         json_string_fields = ["isLeader"]
@@ -2617,6 +2688,7 @@ package:
           "executors",
           "tasks",
           "messages",
+          "overlay",
         ]
         ## The user agent to send with requests
         user_agent = "Telegraf-mesos"
@@ -2766,6 +2838,7 @@ package:
           "executors",
           "tasks",
           "messages",
+          "overlay",
         ]
         ## The user agent to send with requests
         user_agent = "Telegraf-mesos"

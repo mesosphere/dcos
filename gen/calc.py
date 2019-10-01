@@ -37,7 +37,7 @@ import yaml
 import gen.internals
 
 
-DCOS_VERSION = '1.14.0-dev'
+DCOS_VERSION = '2.1.0-dev'
 
 CHECK_SEARCH_PATH = '/opt/mesosphere/bin:/usr/bin:/bin:/sbin'
 
@@ -213,6 +213,11 @@ def validate_metronome_gpu_scheduling_behavior(metronome_gpu_scheduling_behavior
 def validate_marathon_gpu_scheduling_behavior(marathon_gpu_scheduling_behavior):
     assert marathon_gpu_scheduling_behavior in ['restricted', 'unrestricted', ''], \
         "marathon_gpu_scheduling_behavior must be 'restricted', 'unrestricted', 'undefined' or ''"
+
+
+def validate_marathon_new_group_enforce_role(marathon_new_group_enforce_role):
+    assert marathon_new_group_enforce_role in ['top', 'off', ''], \
+        "marathon_new_group_enforce_role must be 'top', 'off', or ''"
 
 
 def calculate_mesos_log_retention_count(mesos_log_retention_mb):
@@ -407,6 +412,28 @@ def validate_num_masters(num_masters):
 def validate_bootstrap_url(bootstrap_url):
     assert len(bootstrap_url) > 1, "Should be a url (http://example.com/bar or file:///path/to/local/cache)"
     assert bootstrap_url[-1] != '/', "Must not end in a '/'"
+
+
+def validate_exhibitor_bootstrap_ca_url(exhibitor_bootstrap_ca_url):
+    if exhibitor_bootstrap_ca_url == '':
+        return
+
+    assert exhibitor_bootstrap_ca_url[-1] != '/', "Must not end in a '/'"
+
+    try:
+        protocol, url = exhibitor_bootstrap_ca_url.split('://')
+    except ValueError as exc:
+        message = (
+            'Failed to determine `exhibitor_bootstrap_ca_url` protocol.'
+        )
+        raise AssertionError(message) from exc
+
+    if protocol != 'https':
+        message = (
+            'Expected `https://` as `exhibitor_bootstrap_ca_url` '
+            'protocol.'
+        )
+        raise AssertionError(message)
 
 
 def validate_channel_name(channel_name):
@@ -717,6 +744,22 @@ def validate_mesos_recovery_timeout(mesos_recovery_timeout):
     assert value.count('.') <= 1, "Invalid decimal format."
     assert float(value) <= 2**64, "Value {} not in supported range.".format(value)
     assert unit in units, "Unit '{}' not in {}.".format(unit, units)
+
+
+def validate_mesos_default_container_shm_size(
+        mesos_default_container_shm_size, has_mesos_default_container_shm_size):
+    if has_mesos_default_container_shm_size == 'true':
+        units = ['B', 'KB', 'MB', 'GB', 'TB']
+
+        match = re.match("([\d\.]+)(\w+)", mesos_default_container_shm_size)
+        assert match is not None, "Error parsing 'mesos_default_container_shm_size' value: {}.".format(
+            mesos_default_container_shm_size)
+
+        value = match.group(1)
+        unit = match.group(2).upper()
+
+        assert value.count('.') == 0, "Fractional bytes: {}.".format(value)
+        assert unit in units, "Unit '{}' not in {}.".format(unit, units)
 
 
 def calculate_check_config_contents(check_config, custom_checks, check_search_path, check_ld_library_path):
@@ -1051,6 +1094,7 @@ entry = {
         validate_s3_prefix,
         validate_num_masters,
         validate_bootstrap_url,
+        validate_exhibitor_bootstrap_ca_url,
         validate_channel_name,
         validate_dns_search,
         validate_master_list,
@@ -1060,6 +1104,8 @@ entry = {
         validate_zk_hosts,
         validate_zk_path,
         validate_superuser_credentials_not_partially_given,
+        lambda exhibitor_tls_enabled: validate_true_false(exhibitor_tls_enabled),
+        lambda exhibitor_tls_required: validate_true_false(exhibitor_tls_required),
         lambda auth_cookie_secure_flag: validate_true_false(auth_cookie_secure_flag),
         lambda oauth_enabled: validate_true_false(oauth_enabled),
         lambda oauth_available: validate_true_false(oauth_available),
@@ -1111,6 +1157,11 @@ entry = {
         validate_mesos_recovery_timeout,
         validate_metronome_gpu_scheduling_behavior,
         lambda mesos_seccomp_enabled: validate_true_false(mesos_seccomp_enabled),
+        lambda mesos_docker_volume_chown:
+            validate_true_false(mesos_docker_volume_chown),
+        lambda mesos_disallow_sharing_agent_ipc_namespace:
+            validate_true_false(mesos_disallow_sharing_agent_ipc_namespace),
+        validate_mesos_default_container_shm_size,
         lambda check_config: validate_check_config(check_config),
         lambda custom_checks: validate_check_config(custom_checks),
         lambda custom_checks, check_config: validate_custom_checks(custom_checks, check_config),
@@ -1125,6 +1176,7 @@ entry = {
         lambda log_offers: validate_true_false(log_offers),
         lambda mesos_cni_root_dir_persist: validate_true_false(mesos_cni_root_dir_persist),
         lambda enable_mesos_input_plugin: validate_true_false(enable_mesos_input_plugin),
+        validate_marathon_new_group_enforce_role,
     ],
     'default': {
         'exhibitor_azure_account_key': '',
@@ -1169,8 +1221,12 @@ entry = {
         'mesos_recovery_timeout': '24hrs',
         'mesos_seccomp_enabled': 'true',
         'mesos_seccomp_profile_name': 'default.json',
+        'mesos_docker_volume_chown': 'false',
+        'mesos_disallow_sharing_agent_ipc_namespace': 'false',
+        'mesos_default_container_shm_size': '',
         'metronome_gpu_scheduling_behavior': 'restricted',
         'marathon_gpu_scheduling_behavior': 'restricted',
+        'marathon_new_group_enforce_role': 'top',
         'oauth_issuer_url': 'https://dcos.auth0.com/',
         'oauth_client_id': '3yF5TOSzdlI45Q1xspxzeoGBe9fNxm9m',
         'oauth_auth_redirector': 'https://auth.dcos.io',
@@ -1238,6 +1294,12 @@ entry = {
         'superuser_service_account_uid': '',
         'superuser_service_account_public_key': '',
         '_superuser_service_account_public_key_json': calculate__superuser_service_account_public_key_json,
+        # This is a private variable that is not supposed to be used by cluster
+        # operators. It allows to explicitly disable Exhibitor TLS in DC/OS Enterprise
+        # version even if the DC/OS Bootstrap CA service is available.
+        'exhibitor_tls_enabled': 'false',
+        'exhibitor_tls_required': 'false',
+        'exhibitor_bootstrap_ca_url': '',
         'enable_gpu_isolation': 'true',
         'cluster_docker_registry_url': '',
         'cluster_docker_credentials_dcos_owned': calculate_docker_credentials_dcos_owned,
@@ -1297,6 +1359,8 @@ entry = {
         'has_mesos_max_completed_tasks_per_framework': calculate_has_mesos_max_completed_tasks_per_framework,
         'has_mesos_seccomp_profile_name':
             lambda mesos_seccomp_profile_name: calculate_set(mesos_seccomp_profile_name),
+        'has_mesos_default_container_shm_size':
+            lambda mesos_default_container_shm_size: calculate_set(mesos_default_container_shm_size),
         'mesos_hooks': calculate_mesos_hooks,
         'use_mesos_hooks': calculate_use_mesos_hooks,
         'rexray_config_contents': calculate_rexray_config_contents,
@@ -1317,6 +1381,8 @@ entry = {
         'metronome_port': '9000',
         'has_metronome_gpu_scheduling_behavior':
             lambda metronome_gpu_scheduling_behavior: calculate_set(metronome_gpu_scheduling_behavior),
+        'has_marathon_new_group_enforce_role':
+            lambda marathon_new_group_enforce_role: calculate_set(marathon_new_group_enforce_role),
         'has_marathon_gpu_scheduling_behavior':
             lambda marathon_gpu_scheduling_behavior: calculate_set(marathon_gpu_scheduling_behavior),
 

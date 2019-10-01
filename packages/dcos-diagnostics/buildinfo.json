@@ -3,7 +3,7 @@
   "single_source" : {
     "kind": "git",
     "git": "https://github.com/dcos/dcos-diagnostics.git",
-    "ref": "547c0a715026490e3897f18f2546c32be7bbed52",
+    "ref": "1b3be79e72185db0c9786d0d994984eb5d1efc4b",
     "ref_origin": "master"
   },
   "username": "dcos_diagnostics",

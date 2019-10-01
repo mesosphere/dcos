@@ -141,10 +141,13 @@ def test_systemd_units_are_healthy(dcos_api_session) -> None:
         'dcos-mesos-master.service',
         'dcos-metronome.service',
         'dcos-signal.service',
+        'dcos-signal.timer',
         'dcos-bouncer.service',
         'dcos-bouncer-migrate-users.service',
         'dcos-ui-update-service.service',
         'dcos-ui-update-service.socket',
+        'dcos-diagnostics-mesos-state.service',
+        'dcos-diagnostics-mesos-state.timer',
     ]
     all_node_units = [
         'dcos-checks-api.service',
@@ -156,7 +159,6 @@ def test_systemd_units_are_healthy(dcos_api_session) -> None:
         'dcos-net.service',
         'dcos-net-watchdog.service',
         'dcos-pkgpanda-api.service',
-        'dcos-signal.timer',
         'dcos-checks-poststart.service',
         'dcos-checks-poststart.timer',
         'dcos-telegraf.service',

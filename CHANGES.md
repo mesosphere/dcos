@@ -1,53 +1,34 @@
 Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos/dcos/wiki/CHANGES.md-guidelines). Thank you!
 
 
-## DC/OS 1.14.0 (in development)
+## DC/OS 2.1.0 (in development)
 
 
 ### What's new
 
-* Metronome post-install configuration can be added to `/var/lib/dcos/metronome/environment`. (DCOS_OSS-5309)
+* Switched from Oracle Java 8 to OpenJDK 8 (DCOS-54902)
 
-* The DC/OS configuration variable `mesos_seccomp_enabled` now defaults to `true`, with `mesos_seccomp_profile_name` set to `default.json`. This is not expected to break tasks. If you experience problems, though, please note that seccomp can be disabled for individual tasks through the DC/OS SDK and Marathon. (DCOS-50038)
+* Updated DC/OS UI to [master+v2.149.3](https://github.com/dcos/dcos-ui/releases/tag/master+v2.149.3).
 
-* Updated ref of dvdcli to fix dvdcli package build (DCOS-53581)
+* The configuration option `MARATHON_ACCEPTED_RESOURCE_ROLES_DEFAULT_BEHAVIOR` replaces the config option `MARATHON_DEFAULT_ACCEPTED_RESOURCE_ROLES`. Please see the Marathon [command-line flag documentation](https://github.com/mesosphere/marathon/blob/master/docs/docs/command-line-flags.md) for a description of the flag.
 
-* Updated DC/OS UI to [master+v2.111.1](https://github.com/dcos/dcos-ui/releases/tag/master+v2.111.1)
+* Updated to [Mesos 1.9](https://github.com/apache/mesos/blob/4895d4430f1349dc126fb004102184f8d0e9d2b3/CHANGELOG). (DCOS_OSS-5342)
 
-* Fixed performance degradation in Lashup. As of now, dcos-dns uses a new LWW mode to gossip dns zone updates. (DCOS_OSS-4240)
+* Mesos overlay networking: support dropping agents from the state. (DCOS_OSS-5536)
 
-* Optimized memory and cpu usage in dcos-net. (DCOS_OSS-5269, DCOS_OSS-5268)
+* Update CNI to 0.7.6
 
-* Telegraf now supports specyfying port names for task-label based Prometheus endpoints discovery. (DCOS-55100)
-
-* Enabled Mesos IPC namespace isolator for configurable IPC namespace and /dev/shm. (DCOS-54618)
-
-* Enhanced compatibility of `gen/build_deploy/bash.py` with Oracle Linux (Thanks to Michal Jakobczyk for the patch).
-
-* Upgraded Admin Router's underlying OpenResty/nginx from 1.13.x to 1.15.x. (DCOS_OSS-5320)
-
-* Upgraded Erlang OTP to release 22.0.3. (DCOS_OSS-5276)
-
-* Upgraded platform CPython to release 3.6.8. (DCOS_OSS-5318)
-
-* Upgraded CockroachDB to release [2.1.7](https://www.cockroachlabs.com/docs/releases/v2.1.7.html). (DCOS_OSS-5262)
-
-* Upgraded platform curl from 7.59.0 to 7.65.1. (DCOS_OSS-5319)
-
-* Upgraded platform OpenSSL from 1.0.2x to release 1.1.1x. (DCOS-54108)
-
-* Updated DC/OS UI to [master+v2.117.0](https://github.com/dcos/dcos-ui/releases/tag/master+v2.117.0)
+* Updated to Boost 1.65.0 (DCOS_OSS-5555)
 
 
 ### Breaking changes
 
-The following parameters have been removed from the DC/OS installer:
+* Remove the octarine package from DC/OS. It was originally used as a proxy for the CLI but is not used for this purpose, anymore.
 
-* --set-superuser-password
-* --offline
-* --cli-telemetry-disabled
-* --validate-config
-* --preflight
-* --install-prereqs
-* --deploy
-* --postflight
+* DC/OS Net: wait till agents become active before fanning out Mesos tasks. (DCOS_OSS-5463)
+
+* Remove the avro-cpp package from DC/OS. It was originally used as part of the metrics-collection framework which now relies on a different infrastructure.
+
+* Remove the spartan package from DC/OS. Is was deprecated in 1.11 and replaced by dcos-net.
+
+* Remove the toybox package from DC/OS. Is was used only by Spartan.

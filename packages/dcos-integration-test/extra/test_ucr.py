@@ -118,6 +118,39 @@ def test_if_ucr_app_can_be_deployed_with_auto_cgroups(dcos_api_session):
         pass
 
 
+def test_if_ucr_app_can_be_deployed_with_shm_in_specified_size(dcos_api_session):
+    """Marathon app deployment integration test using the Mesos Containerizer.
+
+    This test verifies that a marathon ucr app can be launched with a specified
+    size (1234MB) of private /dev/shm.
+    """
+    app = {
+        'id': '/test-ucr-' + str(uuid.uuid4().hex),
+        'cpus': 0.1,
+        'mem': 32,
+        'instances': 1,
+        'cmd': 'while true; do sleep 1; done',
+        'container': {
+            'type': 'MESOS',
+            'docker': {
+                'image': 'library/alpine'
+            },
+            "linuxInfo": {"ipcInfo": {"mode": "PRIVATE", "shmSize": 1234}}
+        },
+        'healthChecks': [{
+            'protocol': 'COMMAND',
+            'command': {'value': 'df -m /dev/shm | grep -w 1234'},
+            'gracePeriodSeconds': 5,
+            'intervalSeconds': 10,
+            'timeoutSeconds': 10,
+            'maxConsecutiveFailures': 3
+        }]
+    }
+    with dcos_api_session.marathon.deploy_and_cleanup(app):
+        # Trivial app if it deploys, there is nothing else to check
+        pass
+
+
 def test_if_ucr_pods_can_be_deployed_with_image_entrypoint(dcos_api_session):
     """Marathon pods inside ucr deployment integration test.
 
@@ -344,6 +377,47 @@ def test_if_ucr_pods_can_be_deployed_with_non_root_user_ephemeral_volume(dcos_ap
         ],
         'networks': [{'mode': 'host'}],
         'volumes': [{'name': 'volume1'}]
+    }
+    with dcos_api_session.marathon.deploy_pod_and_cleanup(pod_definition):
+        # Trivial app if it deploys, there is nothing else to check
+        pass
+
+
+def test_if_ucr_pods_can_share_shm_with_childs(dcos_api_session):
+    """Marathon pods inside ucr deployment integration test.
+
+    This test launches a marathon ucr pod with a specified size (1234MB)
+    of private /dev/shm and share it with one of its child containers but
+    not the other one, and then verifies the size of one child container's
+    /dev/shm is 1234MB and the other's is not.
+    """
+    test_uuid = uuid.uuid4().hex
+    pod_definition = {
+        'id': '/integration-test-pods-{}'.format(test_uuid),
+        'scaling': {'kind': 'fixed', 'instances': 1},
+        'environment': {'PING': 'PONG'},
+        'containers': [
+            {
+                'name': 'container1',
+                'resources': {'cpus': 0.1, 'mem': 32},
+                'image': {'kind': 'DOCKER', 'id': 'library/alpine'},
+                'exec': {'command': {'shell': 'df -m /dev/shm | grep -w 1234'}},
+                'linuxInfo': {'ipcInfo': {'mode': 'SHARE_PARENT'}}
+            },
+            {
+                'name': 'container2',
+                'resources': {'cpus': 0.1, 'mem': 32},
+                'exec': {
+                    'command': {
+                        'shell': 'test -z $(df -m /dev/shm | grep -w 1234) && '
+                                 'echo $PING > foo; while true; do sleep 1; done'
+                    }
+                },
+                'healthcheck': {'command': {'shell': 'test $PING = `cat foo`'}}
+            }
+        ],
+        'networks': [{'mode': 'host'}],
+        'linuxInfo': {'ipcInfo': {'mode': 'PRIVATE', 'shmSize': 1234}}
     }
     with dcos_api_session.marathon.deploy_pod_and_cleanup(pod_definition):
         # Trivial app if it deploys, there is nothing else to check
