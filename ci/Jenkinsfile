@@ -40,6 +40,7 @@ pipeline {
                   echo "Docker is running"
 		'''
 		sh '''
+		  source "$HOME/.bashrc"
 		  pyenv versions
 		  python --version
 		  python3.5 --version
