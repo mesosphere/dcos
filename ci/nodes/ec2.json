@@ -10,8 +10,8 @@
   },
   "builders": [{
     "type": "amazon-ebs",
-    "region": "us-west-2",
-    "source_ami": "ami-01ed306a12b7d1c96",
+    "region": "us-east-1",
+    "source_ami": "ami-d5bf2caa",
     "instance_type": "m5.2xlarge",
     "vpc_id": "{{user `vpc_id`}}",
     "subnet_id": "{{user `subnet_id`}}",

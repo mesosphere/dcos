@@ -3,7 +3,7 @@ module "dcos-vpc" {
   version = "~> 0.2.0"
 
   cluster_name = "packer"
-  availability_zones = ["us-west-2b"]
+  availability_zones = ["us-east-1b"]
   subnet_range = "172.16.0.0/16"
 }
 

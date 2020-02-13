@@ -35,7 +35,7 @@ pipeline {
 	  }
           stage('Tox') {
 	    agent {
-	       label 'ec2-large-20200213'
+	       label 'py36'
 	    }
             steps {
               ansiColor('xterm') {
