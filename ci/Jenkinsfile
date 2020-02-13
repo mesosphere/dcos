@@ -30,15 +30,16 @@ pipeline {
             steps {
               ansiColor('xterm') {
 	        sh '''
-                  until sudo docker info >/dev/null 2>&1; do
-                    if sudo systemctl is-active docker.service >/dev/null; then
-                      sudo systemctl start docker.service
+                  until docker info >/dev/null 2>&1; do
+                    if sudo systemctl is-active docker >/dev/null; then
+                      sudo systemctl start docker
                       continue
                     fi
-                    echo "docker running but not yet responding. Sleeping 10s..."
+		    systemctl status docker
+                    echo "Docker running but not yet responding. Sleeping 10s..."
                     sleep 10
                   done
-                  echo "docker is running"
+                  echo "Docker is running"
 		'''
 	        sh './build_local.sh'
 	      }
