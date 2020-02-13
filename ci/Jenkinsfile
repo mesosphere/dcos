@@ -29,13 +29,14 @@ pipeline {
 	    }
             steps {
               ansiColor('xterm') {
-	        sh './build_teamcity'
+	        sh './build_local.sh'
 	      }
 	    }
 	  }
           stage('Tox') {
 	    agent {
-	       label 'py36'
+	       // TODO(kjeschkies): Use small or mediu: Use small or mediumm
+	       label 'ec2-large-20200213'
 	    }
             steps {
               ansiColor('xterm') {
