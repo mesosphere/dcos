@@ -39,6 +39,7 @@ pipeline {
 	    }
             steps {
               ansiColor('xterm') {
+	        sh 'pip install tox'
 	        sh 'tox'
 	      }
 	    }

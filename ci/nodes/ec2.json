@@ -39,8 +39,9 @@
     "execute_command": "bash '{{ .Path }}'",
     "type": "shell",
     "scripts": [
-        "python.sh",
-        "docker.sh"
+        "docker.sh",
+	"java.sh",
+        "python.sh"
     ],
     "pause_before": "10s"
   }]
