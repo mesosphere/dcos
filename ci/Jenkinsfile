@@ -29,13 +29,24 @@ pipeline {
 	    }
             steps {
               ansiColor('xterm') {
+	        sh '''
+                  until sudo docker info >/dev/null 2>&1; do
+                    if sudo systemctl is-active docker.service >/dev/null; then
+                      sudo systemctl start docker.service
+                      continue
+                    fi
+                    echo "docker running but not yet responding. Sleeping 10s..."
+                    sleep 10
+                  done
+                  echo "docker is running"
+		'''
 	        sh './build_local.sh'
 	      }
 	    }
 	  }
           stage('Tox') {
 	    agent {
-	       // TODO(kjeschkies): Use small or mediu: Use small or mediumm
+	       // TODO(kjeschkies): Use small or medium: Use small or mediumm
 	       label 'ec2-large-20200213'
 	    }
             steps {
