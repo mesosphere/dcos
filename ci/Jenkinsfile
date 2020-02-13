@@ -31,11 +31,8 @@ pipeline {
               ansiColor('xterm') {
 	        sh '''
                   until docker info >/dev/null 2>&1; do
-                    if sudo systemctl is-active docker >/dev/null; then
-		      echo "Starting Docker..."
-                      sudo systemctl start docker
-                      continue
-                    fi
+		    echo "Starting Docker..."
+                    sudo systemctl start docker
 		    systemctl status docker || true
                     echo "Docker running but not yet responding. Sleeping 10s..."
                     sleep 10
