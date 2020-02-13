@@ -40,12 +40,19 @@ pipeline {
                   echo "Docker is running"
 		'''
 		sh '''
-		  source "$HOME/.bashrc"
+                  export PATH="$HOME"/.pyenv/bin:"$PATH"
+                  eval "$(pyenv init -)"
+                  eval "$(pyenv virtualenv-init -)"
 		  pyenv versions
 		  python --version
 		  python3.5 --version
 		'''
-	        sh './build_local.sh'
+	        sh '''
+                  export PATH="$HOME"/.pyenv/bin:"$PATH"
+                  eval "$(pyenv init -)"
+                  eval "$(pyenv virtualenv-init -)"
+		  ./build_local.sh
+		'''
 	      }
 	    }
 	  }
