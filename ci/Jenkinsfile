@@ -39,6 +39,11 @@ pipeline {
                   done
                   echo "Docker is running"
 		'''
+		sh '''
+		  pyenv versions
+		  python --version
+		  python3.5 --version
+		'''
 	        sh './build_local.sh'
 	      }
 	    }
