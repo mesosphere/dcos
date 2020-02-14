@@ -39,14 +39,6 @@ pipeline {
                   done
                   echo "Docker is running"
 		'''
-		sh '''
-                  export PATH="$HOME"/.pyenv/bin:"$PATH"
-                  eval "$(pyenv init -)"
-                  eval "$(pyenv virtualenv-init -)"
-		  pyenv versions
-		  python --version
-		  python3.5 --version
-		'''
 	        sh '''
                   export PATH="$HOME"/.pyenv/bin:"$PATH"
                   eval "$(pyenv init -)"
@@ -63,8 +55,23 @@ pipeline {
 	    }
             steps {
               ansiColor('xterm') {
-	        sh 'pip install tox'
-	        sh 'tox'
+	        sh '''
+                  until docker info >/dev/null 2>&1; do
+		    echo "Starting Docker..."
+                    sudo systemctl start docker
+		    systemctl status docker || true
+                    echo "Docker running but not yet responding. Sleeping 10s..."
+                    sleep 10
+                  done
+                  echo "Docker is running"
+		'''
+	        sh '''
+                  export PATH="$HOME"/.pyenv/bin:"$PATH"
+                  eval "$(pyenv init -)"
+                  eval "$(pyenv virtualenv-init -)"
+		  pip install tox
+		  tox
+		'''
 	      }
 	    }
 	  }
