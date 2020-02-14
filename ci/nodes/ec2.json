@@ -39,6 +39,7 @@
     "execute_command": "bash '{{ .Path }}'",
     "type": "shell",
     "scripts": [
+	"git.sh",
         "docker.sh",
 	"java.sh",
         "python.sh"

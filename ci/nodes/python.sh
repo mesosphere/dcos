@@ -3,7 +3,7 @@ set -e
 
 export PATH="$HOME"/.pyenv/bin:"$PATH"
 
-sudo yum install -y git zlib-devel bzip2 bzip2-devel gcc gcc-c++ make git patch openssl-devel zlib-devel readline-devel sqlite-devel bzip2-devel
+sudo yum install -y zlib-devel bzip2 bzip2-devel gcc gcc-c++ make patch openssl-devel zlib-devel readline-devel sqlite-devel bzip2-devel
 curl -L https://raw.githubusercontent.com/yyuu/pyenv-installer/master/bin/pyenv-installer -o /tmp/pyenv-installer
 
 # Install pyenv
