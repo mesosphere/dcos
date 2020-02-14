@@ -25,7 +25,7 @@ pipeline {
       parallel {
           stage('Build DC/OS') {
 	    agent {
-	       label 'ec2-large-20200213'
+	       label 'ec2-large-20200214'
 	    }
             steps {
               ansiColor('xterm') {
@@ -51,7 +51,7 @@ pipeline {
           stage('Tox') {
 	    agent {
 	       // TODO(kjeschkies): Use small or medium: Use small or mediumm
-	       label 'ec2-large-20200213'
+	       label 'ec2-large-20200214'
 	    }
             steps {
               ansiColor('xterm') {
