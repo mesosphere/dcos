@@ -1,0 +1,6 @@
+adminrouter
+dcos-diagnostics
+docker
+mesos-agent
+telegraf
+WinRM

@@ -108,7 +108,7 @@ chmod {mode} {filename}
 
 """
 
-bash_template = """#!/bin/bash
+bash_template = r"""#!/bin/bash
 #
 # BASH script to install DC/OS on a node
 #
@@ -494,6 +494,9 @@ function check_all() {
         for service in \
             "53 dcos-net" \
             "80 adminrouter" \
+            "179 dcos-calico-bird" \
+            "2379 dcos-etcd" \
+            "2380 dcos-etcd" \
             "443 adminrouter" \
             "1050 dcos-diagnostics" \
             "2181 zookeeper" \
@@ -513,6 +516,7 @@ function check_all() {
             "61091 telegraf" \
             "62020 fluent-bit" \
             "62080 dcos-net" \
+            "62091 dcos-calico-felix" \
             "62501 dcos-net"
         do
             check_service $service
@@ -521,11 +525,13 @@ function check_all() {
         # agent / public agent node service checks
         for service in \
             "53 dcos-net" \
+            "179 dcos-calico-bird" \
             "5051 mesos-agent" \
             "61001 agent-adminrouter" \
             "61091 telegraf" \
             "62020 fluent-bit" \
             "62080 dcos-net" \
+            "62091 dcos-calico-felix" \
             "62501 dcos-net"
         do
             check_service $service
@@ -637,21 +643,7 @@ fi
 def generate(gen_out, output_dir):
     print("Generating Bash configuration files for DC/OS")
     make_bash(gen_out)
-    make_powershell(gen_out)
     util.do_bundle_onprem(gen_out, output_dir)
-
-
-def make_powershell(gen_out) -> None:
-    """Build powershell deployment script."""
-    # Populate the powershell script to Bootstrap for further deployment of Windows agent
-    powershell_script_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'powershell/dcos_install.ps1')
-    with open(powershell_script_path, 'r') as f:
-        powershell_script = f.read()
-
-    # Output the dcos install ps1 script
-    install_script_filename = 'dcos_install.ps1'
-    pkgpanda.util.write_string(install_script_filename, powershell_script)
-    f.close()
 
 
 def make_bash(gen_out) -> None:
