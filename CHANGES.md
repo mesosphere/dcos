@@ -52,7 +52,7 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 
 * Calico network: When using the Universal Runtime Engine, the contents of the `DCOS_SPACE`  network label will be compressed to `<7-char hash>...<last 53 chars>` if it is longer than 63 characters. (D2IQ-62219)
 
-#### Update Marathon to 1.10.5
+#### Update Marathon to 1.10.6
 
 * Adds support for Mesos Resource Limits (D2IQ-61131) (D2IQ-61130)
 * Removes `revive_offers_for_new_apps` option.
@@ -73,7 +73,11 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 
 * New format for Admin Router access logs. (D2IQ-43957, DCOS-59598, D2IQ-62839)
 
-* Update OpenResty to 1.15.8.2. (DCOS-61159)
+* Update OpenResty to 1.15.8.3. (DCOS-61159, D2IQ-66506)
+
+### Marathon
+
+* Marathon no longer sanitizes the field `"acceptedResourceRoles"`. The field is an array of one or two values: `*` and the service role. Previously, when an invalid value was provided, Marathon would silently drop it. Now, it returns an error. If this causes a disruption, you can re-enable this feature by adding `MARATHON_DEPRECATED_FEATURES=sanitize_accepted_resource_roles` to the file `/var/lib/dcos/marathon/environment` on all masters. You must remove this line before upgrading to DC/OS 2.2.
 
 ### Fixed and improved
 
@@ -87,20 +91,25 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 
 * Fix Telegraf migration when no containers present. (D2IQ-64507)
 
-* Update OpenSSL to 1.1.1d. (D2IQ-65604)
+* Update OpenSSL to 1.1.1f. (D2IQ-65604, D2IQ-66526)
+
+#### Update Marathon to 1.10.6
 
 * Marathon updated to 1.9.136
 
-    * /v2/tasks plaintext output in Marathon 1.5 returned container network endpoints in an unusable way (MARATHON-8721)
+* /v2/tasks plaintext output in Marathon 1.5 returned container network endpoints in an unusable way (MARATHON-8721)
 
-    * Marathon launched too many tasks. (DCOS_OSS-5679)
+* Marathon launched too many tasks. (DCOS_OSS-5679)
 
-    * Marathon used to omit pod status report with tasks in `TASK_UNKOWN` state. (MARATHON-8710)
+* Marathon used to omit pod status report with tasks in `TASK_UNKOWN` state. (MARATHON-8710)
 
-    * With UnreachableStrategy, setting `expungeAfterSeconds` and `inactiveAfterSeconds` to the same value will cause the
-      instance to be expunged immediately; this helps with `GROUP_BY` or `UNIQUE` constraints. (MARATHON-8719)
+* With UnreachableStrategy, setting `expungeAfterSeconds` and `inactiveAfterSeconds` to the same value will cause the
+instance to be expunged immediately; this helps with `GROUP_BY` or `UNIQUE` constraints. (MARATHON-8719)
 
-    * Marathon was checking authorization for unrelated apps when performing a kill-and-scale operations; this has been resolved. (MARATHON-8731)
-* Update Metronome to 0.6.41
+* Marathon was checking authorization for unrelated apps when performing a kill-and-scale operations; this has been resolved. (MARATHON-8731)
 
-    * There was a case where regex validation of project ids was ineffecient for certain inputs. The regex has been optimized. (MARATHON-8730)
+* A race condition would cause Marathon to fail to start properly. (MARATHON-8741)
+
+#### Update Metronome to 0.6.41
+
+* There was a case where regex validation of project ids was ineffecient for certain inputs. The regex has been optimized. (MARATHON-8730)
