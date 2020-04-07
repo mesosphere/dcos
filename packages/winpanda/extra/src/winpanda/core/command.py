@@ -6,7 +6,11 @@ import abc
 import os
 from pathlib import Path
 import shutil
+import subprocess
+from typing import Optional
 import yaml
+
+from atomicwrites import atomic_write
 
 from cfgm import exceptions as cfgm_exc
 from common import exceptions as cm_exc
@@ -17,20 +21,50 @@ from common.cli import CLI_COMMAND, CLI_CMDTARGET, CLI_CMDOPT
 from common.storage import ISTOR_NODE
 from core import cmdconf
 from core import exceptions as cr_exc
-from core.istate import ISTATE
 from core.package.id import PackageId
 from core.package.manifest import PackageManifest
 from core.package.package import Package
 from core import utils as cr_utl
 from extm import exceptions as extm_exc
 from svcm import exceptions as svcm_exc
-from svcm.base import WindowsServiceManager
 from svcm.nssm import SVC_STATUS
 
 
 LOG = logger.get_logger(__name__)
 
 CMD_TYPES = {}
+
+
+STATE_INSTALLING = 'INSTALLING'
+STATE_UPGRADING = 'UPGRADING'
+STATE_NEEDS_START = 'NEEDS_START'
+
+
+class CommandState:
+    """
+    Save and retrieve a state in a file.
+    """
+
+    def __init__(self, filename: str):
+        self.filename = filename
+
+    def get_state(self) -> Optional[str]:
+        try:
+            with open(self.filename, encoding='utf-8') as f:
+                return f.read()
+        except FileNotFoundError:
+            return None
+
+    def set_state(self, state: str):
+        os.makedirs(os.path.dirname(self.filename), exist_ok=True)
+        with atomic_write(self.filename, overwrite=True, encoding='utf-8') as f:
+            f.write(state)
+
+    def unset_state(self):
+        try:
+            os.remove(self.filename)
+        except FileNotFoundError:
+            pass
 
 
 def create(**cmd_opts):
@@ -90,6 +124,7 @@ class Command(metaclass=abc.ABCMeta):
 @command_type(CLI_COMMAND.SETUP)
 class CmdSetup(Command):
     """Setup command implementation."""
+
     def __init__(self, **cmd_opts):
         """"""
         super(CmdSetup, self).__init__(**cmd_opts)
@@ -98,6 +133,7 @@ class CmdSetup(Command):
             self.cmd_opts[CLI_CMDOPT.DCOS_CLUSTERCFGPATH] = 'NOP'
 
         self.config = cmdconf.create(**self.cmd_opts)
+        self.state = CommandState(str(self.config.inst_storage.var_dpath / 'state'))
 
         LOG.debug(f'{self.msg_src}: cmd_opts: {self.cmd_opts}')
 
@@ -110,40 +146,33 @@ class CmdSetup(Command):
         LOG.debug(f'{self.msg_src}: Execute: Target:'
                   f' {self.cmd_opts.get(CLI_CMDOPT.CMD_TARGET)}')
 
-        try:
-            cmd_target = self.cmd_opts.get(CLI_CMDOPT.CMD_TARGET)
-            if cmd_target == CLI_CMDTARGET.STORAGE:
-                # (Re)build/repair the installation storage structure.
-                self.config.inst_storage.construct(
-                    clean=self.cmd_opts.get(CLI_CMDOPT.INST_CLEAN)
+        cmd_target = self.cmd_opts.get(CLI_CMDOPT.CMD_TARGET)
+        if cmd_target == CLI_CMDTARGET.STORAGE:
+            # (Re)build/repair the installation storage structure.
+            self.config.inst_storage.construct(
+                clean=self.cmd_opts.get(CLI_CMDOPT.INST_CLEAN)
+            )
+        elif cmd_target == CLI_CMDTARGET.PKGALL:
+            # If there is a state file, then install/update failed previously.
+            # If there is a Mesos exe, then there is an existing installation.
+            # In either case, we fail setup.
+            state = self.state.get_state()
+            if state is not None:
+                raise cm_exc.InstallationError(
+                    f'Cannot install DC/OS: detected state {state}'
                 )
-            elif cmd_target == CLI_CMDTARGET.PKGALL:
-                istate = self.config.inst_state.istate
-                if istate == ISTATE.INSTALLATION_IN_PROGRESS:
-                    self._handle_cmdtarget_pkgall()
-                    self._register_istate(ISTATE.INSTALLED)
-                else:
-                    LOG.info(
-                        f'{self.msg_src}: Execute: Invalid DC/OS installation'
-                        f' state detected: {istate}: NOP'
-                    )
+            test_file = self.config.inst_storage.root_dpath / 'bin' / 'mesos-agent.exe'
+            if test_file.exists():
+                raise cm_exc.InstallationError(
+                    f'Cannot install DC/OS: detected existing cluster {test_file}'
+                )
+            self.state.set_state(STATE_INSTALLING)
+            self._handle_cmdtarget_pkgall()
+            self.state.set_state(STATE_NEEDS_START)
+        else:
+            raise NotImplementedError()
 
-            LOG.info(f'{self.msg_src}: Execute: OK')
-        except cm_exc.WinpandaError:
-            self._register_istate(ISTATE.INSTALLATION_FAILED)
-            raise
-
-    def _register_istate(self, inst_state):
-        """"""
-        # TODO: Move this method to the abstract base parent class Command to
-        #       avoid code duplication in command manager classes.
-        msg_base = (f'{self.msg_src}:'
-                    f' Execute: Register installation state: {inst_state}')
-        try:
-            self.config.inst_state.istate = inst_state
-            LOG.debug(f'{msg_base}: OK')
-        except cr_exc.RCError as e:
-            raise cr_exc.SetupCommandError(f'Execute: {type(e).__name__}: {e}')
+        LOG.info(f'{self.msg_src}: Install: OK')
 
     def _handle_cmdtarget_pkgall(self):
         """"""
@@ -156,6 +185,17 @@ class CmdSetup(Command):
         dstor_pkgrepo_path = self.config.cluster_conf.get(
             'distribution-storage', {}
         ).get('pkgrepopath', '')
+
+        # Deploy DC/OS aggregated configuration object
+        _deploy_dcos_conf(self.config.dcos_conf)
+        result = subprocess.run(
+            ('powershell', '-executionpolicy', 'Bypass', '-File', 'C:\\d2iq\\dcos\\bin\\detect_ip.ps1'),
+            stdout=subprocess.PIPE,
+            check=True
+        )
+        local_priv_ipaddr = result.stdout.decode('ascii').strip()
+
+        self.config.dcos_conf['values']['privateipaddr'] = local_priv_ipaddr
 
         # Add packages to the local package repository and initialize their
         # manager objects
@@ -208,9 +248,6 @@ class CmdSetup(Command):
             #       CmdSetup and CmdUpgrade
             self._handle_pkg_cfg_setup(package)
 
-        # Deploy DC/OS aggregated configuration object
-        self._deploy_dcos_conf()
-
         # Run per package extra installation helpers, setup services and
         # save manifests
         for package in packages_sorted_by_deps:
@@ -254,6 +291,10 @@ class CmdSetup(Command):
         for name in ('bin', 'etc', 'include', 'lib'):
             srcdir = pkg_path / name
             if srcdir.exists():
+                LOG.info(
+                    'Install directory %s for package %s',
+                    name, package.id.pkg_name
+                )
                 dstdir = root / name
                 dstdir.mkdir(exist_ok=True)
                 cm_utl.transfer_files(str(srcdir), str(dstdir))
@@ -267,11 +308,11 @@ class CmdSetup(Command):
         #       Package.handle_config_setup()
         pkg_id = package.manifest.pkg_id
 
-        LOG.debug(f'{self.msg_src}: Execute: {pkg_id.pkg_name}: Setup'
+        LOG.info(f'{self.msg_src}: Execute: {pkg_id.pkg_name}: Setup'
                   f' configuration: ...')
         try:
             package.cfg_manager.setup_conf()
-        except cfgm_exc.PkgConfNotFoundError as e:
+        except cfgm_exc.PkgConfNotFoundError:
             LOG.debug(f'{self.msg_src}: Execute: {pkg_id.pkg_name}: Setup'
                       f' configuration: NOP')
         except cfgm_exc.PkgConfManagerError as e:
@@ -320,8 +361,8 @@ class CmdSetup(Command):
 
         if package.svc_manager:
             svc_name = package.svc_manager.svc_name
-            LOG.debug(f'{msg_src}: Execute: {pkg_id.pkg_name}: Setup service:'
-                      f' {svc_name}: ...')
+            LOG.info(f'{msg_src}: Execute: {pkg_id.pkg_name}: Setup service:'
+                      f' {svc_name}: ...', )
             try:
                 ret_code, stdout, stderr = package.svc_manager.status()
             except svcm_exc.ServiceManagerCommandError as e:
@@ -375,40 +416,18 @@ class CmdSetup(Command):
             LOG.debug(f'{msg_src}: Execute: {pkg_id.pkg_name}: Setup service:'
                       f' NOP')
 
-    def _deploy_dcos_conf(self):
-        """Deploy aggregated DC/OS configuration object."""
-        # TODO: This should be made standalone and then reused in command
-        #       manager classes CmdSetup and CmdUpgrade to avoid code
-        #       duplication
-        LOG.debug(f'{self.msg_src}: Execute: Deploy aggregated config: ...')
-
-        template = self.config.dcos_conf.get('template')
-        values = self.config.dcos_conf.get('values')
-
-        rendered = template.render(values)
-        config = yaml.safe_load(rendered)
-
-        assert config.keys() == {"package"}
-
-        # Write out the individual files
-        for file_info in config["package"]:
-            assert file_info.keys() <= {"path", "content", "permissions"}
-            path = Path(file_info['path'].replace('\\', os.path.sep))
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(file_info['content'] or '')
-            # On Windows, we don't interpret permissions yet
-
-        LOG.debug(f'{self.msg_src}: Execute: Deploy aggregated config: OK')
 
 
 @command_type(CLI_COMMAND.UPGRADE)
 class CmdUpgrade(Command):
     """Implementation of the Upgrade command manager."""
+
     def __init__(self, **cmd_opts):
         """"""
         super(CmdUpgrade, self).__init__(**cmd_opts)
 
         self.config = cmdconf.create(**self.cmd_opts)
+        self.state = CommandState(str(self.config.inst_storage.var_dpath / 'state'))
 
         LOG.debug(f'{self.msg_src}: cmd_opts: {self.cmd_opts}')
 
@@ -420,33 +439,19 @@ class CmdUpgrade(Command):
         """Execute command."""
         LOG.debug(f'{self.msg_src}: Execute ...')
 
-        try:
-            istate = self.config.inst_state.istate
-            if istate == ISTATE.UPGRADE_IN_PROGRESS:
-                self._handle_upgrade()
-                self._register_istate(ISTATE.INSTALLED)
-            else:
-                LOG.info(
-                    f'{self.msg_src}: Execute: Invalid DC/OS installation'
-                    f' state detected: {istate}: NOP'
-                )
-
-            LOG.info(f'{self.msg_src}: Execute: OK')
-        except cm_exc.WinpandaError:
-            self._register_istate(ISTATE.UPGRADE_FAILED)
-            raise
-
-    def _register_istate(self, inst_state):
-        """"""
-        # TODO: Move this method to the abstract base parent class Command to
-        #       avoid code duplication in command manager classes.
-        msg_base = (f'{self.msg_src}:'
-                    f' Execute: Register installation state: {inst_state}')
-        try:
-            self.config.inst_state.istate = inst_state
-            LOG.debug(f'{msg_base}: OK')
-        except cr_exc.RCError as e:
-            raise cr_exc.SetupCommandError(f'Execute: {type(e).__name__}: {e}')
+        state = self.state.get_state()
+        if state is not None:
+            raise cm_exc.InstallationError(
+                f'Cannot upgrade DC/OS: detected state {state}'
+            )
+        test_file = self.config.inst_storage.root_dpath / 'bin' / 'mesos-agent.exe'
+        if not test_file.exists():
+            raise cm_exc.InstallationError(
+                f'Cannot upgrade DC/OS: no file at {test_file}'
+            )
+        self.state.set_state(STATE_UPGRADING)
+        self._handle_upgrade()
+        self.state.set_state(STATE_NEEDS_START)
 
     def _handle_upgrade(self):
         """"""
@@ -456,11 +461,10 @@ class CmdUpgrade(Command):
         self._handle_clean_setup()
 
     def _handle_upgrade_pre(self):
-        """"""
-        mheading = f'{self.msg_src}: Execute'
         # TODO: Add all the upgrade preparation steps (package download,
         # TODO: rendering configs, etc.) here. I.e. everything that can be
         # TODO: done without affecting the currently running system.
+        pass
 
     def _handle_teardown(self):
         """Teardown the currently installed DC/OS."""
@@ -485,7 +489,6 @@ class CmdUpgrade(Command):
         for package in cr_utl.pkg_sort_by_deps(packages_bulk):
             package.handle_svc_wipe(mheading)
             package.handle_uninst_extras(mheading)
-            package.handle_vardata_wipe(mheading)
             package.save_manifest(mheading, pkgactive_old_dpath)
             package.delete_manifest(mheading)
 
@@ -500,7 +503,7 @@ class CmdUpgrade(Command):
                            f' {active_dpath}: {type(e).__name__}: {e}')
                 raise cr_exc.RCError(err_msg) from e
 
-            LOG.debug(f'{mheading}: Preserve hared directory: {active_dpath}:'
+            LOG.debug(f'{mheading}: Preserve shared directory: {active_dpath}:'
                       f' {preserve_dpath}')
 
     def _handle_teardown_post(self):
@@ -544,12 +547,12 @@ class CmdUpgrade(Command):
                 LOG.warning(f'{mheading}: After steps: Remove file: {fpath}:'
                             f' {type(e).__name__}: {e}')
 
-        # Restoreobjects created/populated by entities/processes outside
+        # Restore objects created/populated by entities/processes outside
         # of winpanda routines, but required for winpanda to do it's stuff.
 
         restore_dirs = [
-            iroot_dpath.joinpath('bin'),
-            iroot_dpath.joinpath('etc'),
+            iroot_dpath / 'etc',
+            iroot_dpath / 'etc' / 'roles',
         ]
 
         for dpath in restore_dirs:
@@ -561,16 +564,12 @@ class CmdUpgrade(Command):
                             f' {type(e).__name__}: {e}')
 
         restore_files = [
-            (itmp_dpath.joinpath('bin.old', 'detect_ip.ps1'),
-             iroot_dpath.joinpath('bin')),
-            (itmp_dpath.joinpath('bin.old', 'detect_ip_public.ps1'),
-             iroot_dpath.joinpath('bin')),
-            (itmp_dpath.joinpath('bin.old', 'fault-domain-detect-win.ps1'),
-             iroot_dpath.joinpath('bin')),
-            (itmp_dpath.joinpath('etc.old', 'cluster.conf'),
-             iroot_dpath.joinpath('etc')),
-            (itmp_dpath.joinpath('etc.old', 'paths.json'),
-             iroot_dpath.joinpath('etc')),
+            (itmp_dpath / 'etc.old' / 'cluster.conf', iroot_dpath / 'etc'),
+            (itmp_dpath / 'etc.old' / 'paths.json', iroot_dpath / 'etc'),
+            (
+                itmp_dpath / 'etc.old' / 'roles' / 'slave',
+                iroot_dpath / 'etc' / 'roles'
+            ),
         ]
 
         for fspec in restore_files:
@@ -590,13 +589,23 @@ class CmdUpgrade(Command):
         # TODO: This code duplicates the CmdSetup._handle_cmdtarget_pkgall()
         #       stuff and so should be made standalone to be reused in both
         #       classes avoiding massive code duplication.
-        mheading = f'{self.msg_src}: Execute'
         dstor_root_url = self.config.cluster_conf.get(
             'distribution-storage', {}
         ).get('rooturl', '')
         dstor_pkgrepo_path = self.config.cluster_conf.get(
             'distribution-storage', {}
         ).get('pkgrepopath', '')
+
+        # Deploy DC/OS aggregated configuration object
+        _deploy_dcos_conf(self.config.dcos_conf)
+        result = subprocess.run(
+            ('powershell', '-executionpolicy', 'Bypass', '-File', 'C:\\d2iq\\dcos\\bin\\detect_ip.ps1'),
+            stdout=subprocess.PIPE,
+            check=True
+        )
+        local_priv_ipaddr = result.stdout.decode('ascii').strip()
+
+        self.config.dcos_conf['values']['privateipaddr'] = local_priv_ipaddr
 
         # Add packages to the local package repository and initialize their
         # manager objects
@@ -648,9 +657,6 @@ class CmdUpgrade(Command):
             #       method to avoid code duplication in command manager classes
             #       CmdSetup and CmdUpgrade
             self._handle_pkg_cfg_setup(package)
-
-        # Deploy DC/OS aggregated configuration object
-        self._deploy_dcos_conf()
 
         # Run per package extra installation helpers, setup services and
         # save manifests
@@ -712,7 +718,7 @@ class CmdUpgrade(Command):
                   f' configuration: ...')
         try:
             package.cfg_manager.setup_conf()
-        except cfgm_exc.PkgConfNotFoundError as e:
+        except cfgm_exc.PkgConfNotFoundError:
             LOG.debug(f'{self.msg_src}: Execute: {pkg_id.pkg_name}: Setup'
                       f' configuration: NOP')
         except cfgm_exc.PkgConfManagerError as e:
@@ -816,40 +822,41 @@ class CmdUpgrade(Command):
             LOG.debug(f'{msg_src}: Execute: {pkg_id.pkg_name}: Setup service:'
                       f' NOP')
 
-    def _deploy_dcos_conf(self):
-        """Deploy aggregated DC/OS configuration object."""
-        # TODO: This should be made standalone and then reused in command
-        #       manager classes CmdSetup and CmdUpgrade to avoid code
-        #       duplication
-        LOG.debug(f'{self.msg_src}: Execute: Deploy aggregated config: ...')
+def _deploy_dcos_conf(dcos_conf):
+    """Deploy aggregated DC/OS configuration object."""
+    LOG.info('Deploy DC/OS config...')
 
-        template = self.config.dcos_conf.get('template')
-        values = self.config.dcos_conf.get('values')
+    template = dcos_conf.get('template')
+    values = dcos_conf.get('values')
 
-        rendered = template.render(values)
-        config = yaml.safe_load(rendered)
+    rendered = template.render(values)
+    config = yaml.safe_load(rendered)
 
-        assert config.keys() == {"package"}
+    assert config.keys() == {"package"}
 
-        # Write out the individual files
-        for file_info in config["package"]:
-            assert file_info.keys() <= {"path", "content", "permissions"}
-            path = Path(file_info['path'].replace('\\', os.path.sep))
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(file_info['content'] or '')
-            # On Windows, we don't interpret permissions yet
+    # Write out the individual files
+    for file_info in config["package"]:
+        assert file_info.keys() <= {"path", "content", "permissions"}
+        path = Path(file_info['path'].replace('\\', os.path.sep))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        LOG.info('Write file %s', path)
+        path.write_text(file_info['content'] or '')
+        # On Windows, we don't interpret permissions yet
 
-        LOG.debug(f'{self.msg_src}: Execute: Deploy aggregated config: OK')
+    LOG.info('Deployed DC/OS config')
+
 
 @command_type(CLI_COMMAND.START)
 class CmdStart(Command):
     """Start command implementation."""
+
     def __init__(self, **cmd_opts):
         """Constructor."""
         self.msg_src = self.__class__.__name__
         super(CmdStart, self).__init__(**cmd_opts)
 
         self.config = cmdconf.create(**self.cmd_opts)
+        self.state = CommandState(str(self.config.inst_storage.var_dpath / 'state'))
         LOG.debug(f'{self.msg_src}: cmd_opts: {self.cmd_opts}')
 
     def verify_cmd_options(self):
@@ -858,10 +865,16 @@ class CmdStart(Command):
 
     def execute(self):
         """Execute command."""
-        # TODO: Implement DC/OS installation state detection here (alike how
-        #       it's done in CmdSetup.execute() or CmdSetup.execute()) to
-        #       allow attempts to start services only if
-        #       istate == ISTATE.INSTALLED:
+        state = self.state.get_state()
+        if state is not None and state != STATE_NEEDS_START:
+            raise cm_exc.InstallationError(
+                f'Cannot start DC/OS: detected state {state}'
+            )
+        test_file = self.config.inst_storage.root_dpath / 'bin' / 'mesos-agent.exe'
+        if not test_file.exists():
+            raise cm_exc.InstallationError(
+                f'Cannot start DC/OS: no file at {test_file}'
+            )
 
         pkg_manifests = (
             self.config.inst_storage.get_pkgactive(PackageManifest.load)
@@ -890,6 +903,8 @@ class CmdStart(Command):
                     LOG.debug(f'{mheading}: Start service: {svc_name}: OK')
             else:
                 LOG.debug(f'{mheading}: Start service: NOP')
+
+        self.state.unset_state()
 
     @cm_utl.retry_on_exc((svcm_exc.ServiceManagerCommandError,
                           svcm_exc.ServiceTransientError), max_attempts=3)

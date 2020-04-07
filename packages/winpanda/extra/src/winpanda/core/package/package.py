@@ -45,12 +45,7 @@ class Package:
             )
         self.manifest = manifest
 
-        LOG.debug(f'{self.msg_src}: {self.manifest.pkg_id.pkg_id}: Manifest:'
-                  f' {self.manifest}')
-
         self.cfg_manager = PkgConfManager(pkg_manifest=self.manifest)
-        LOG.debug(f'{self.msg_src}: {self.manifest.pkg_id.pkg_id}:'
-                  f' Package configuration manager: {self.cfg_manager}')
 
         if self.manifest.pkg_extcfg:
             self.ext_manager = PkgInstExtrasManager(pkg_manifest=self.manifest)

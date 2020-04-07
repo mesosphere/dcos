@@ -16,7 +16,8 @@ __maintainer__ = 'philipnrmn'
 __contact__ = 'dcos-cluster-ops@mesosphere.io'
 
 
-METRICS_WAITTIME = 5 * 60 * 1000
+DEPLOY_TIMEOUT = 2 * 60
+METRICS_WAITTIME = 4 * 60 * 1000
 METRICS_INTERVAL = 2 * 1000
 STD_WAITTIME = 15 * 60 * 1000
 STD_INTERVAL = 5 * 1000
@@ -34,9 +35,13 @@ def check_tags(tags: dict, required_tag_names: set, optional_tag_names: set = se
         assert tag_val != '', 'Value for tag "%s" must not be empty'.format(tag_name)
 
 
-@pytest.mark.supportedwindows
 def test_metrics_ping(dcos_api_session):
-    """ Test that the metrics service is up on master and agents.
+    """ Test that the dcos-metrics service is up on master and agents.
+
+        This test is not supported on Windows since dcos_metrics
+        plugin is not supported on Windows
+        https://github.com/dcos/telegraf/blame/d3666e/plugins/outputs/dcos_metrics/README.md#L5
+        TODO: https://jira.d2iq.com/browse/D2IQ-65777
     """
     nodes = get_master_and_agents(dcos_api_session)
 
@@ -69,7 +74,6 @@ def get_metrics_prom(dcos_api_session, node):
     return response
 
 
-@pytest.mark.supportedwindows
 def test_metrics_procstat(dcos_api_session):
     """Assert that procstat metrics are present on master and agent nodes."""
     nodes = get_master_and_agents(dcos_api_session)
@@ -117,7 +121,6 @@ def test_metrics_master_mesos(dcos_api_session):
     check_mesos_metrics()
 
 
-@pytest.mark.supportedwindows
 def test_metrics_agents_mesos_overlay(dcos_api_session):
     """Assert that mesos agent overlay module metrics on master and agents are present."""
 
@@ -182,6 +185,21 @@ def test_metrics_master_cockroachdb(dcos_api_session):
 
 
 @pytest.mark.supportedwindows
+def test_metrics_master_etcd(dcos_api_session):
+    """Assert that DC/OS etcd metrics on master are present."""
+    @retrying.retry(wait_fixed=STD_INTERVAL, stop_max_delay=METRICS_WAITTIME)
+    def _check_etcd_metrics():
+        response = get_metrics_prom(dcos_api_session, dcos_api_session.masters[0])
+        for family in text_string_to_metric_families(response.text):
+            for sample in family.samples:
+                if sample[0].startswith('etcd_') and sample[1].get('dcos_component_name') == 'etcd':
+                    return
+        raise Exception('Expected DC/OS etcd etcd_* metric on master nodes not found')
+
+    _check_etcd_metrics()
+
+
+@pytest.mark.supportedwindows
 def test_metrics_master_calico(dcos_api_session):
     """Assert that DC/OS Calico metrics on master are present."""
 
@@ -197,7 +215,6 @@ def test_metrics_master_calico(dcos_api_session):
     _check_calico_metrics()
 
 
-@pytest.mark.supportedwindows
 def test_metrics_agents_calico(dcos_api_session):
     """Assert that DC/OS Calico metrics on agents are present."""
 
@@ -300,9 +317,8 @@ def test_metrics_master_adminrouter_nginx_drop_requests_seconds(dcos_api_session
     check_adminrouter_metrics()
 
 
-# TODO: D2IQ-65403 - muted Windows tests requiring investigation
-@pytest.mark.supportedwindows
-@pytest.mark.xfail("config.getoption('--windows-only')", strict=True, reason="D2IQ-65403")
+# TODO(D2IQ-65403): Expose Adminrouter metrics on Windows
+# @pytest.mark.supportedwindows
 def test_metrics_agent_adminrouter_nginx_drop_requests_seconds(dcos_api_session):
     """
     nginx_vts_*_request_seconds* metrics are not present.
@@ -394,7 +410,8 @@ def test_metrics_master_adminrouter_nginx_vts_processor(dcos_api_session):
     check_adminrouter_metrics()
 
 
-@pytest.mark.supportedwindows
+# TODO(D2IQ-65403): Expose Adminrouter metrics on Windows
+# @pytest.mark.supportedwindows
 def test_metrics_agents_adminrouter_nginx_vts(dcos_api_session):
     """Assert that Admin Router Nginx VTS metrics on agents are present."""
     nodes = get_agents(dcos_api_session)
@@ -418,9 +435,8 @@ def test_metrics_agents_adminrouter_nginx_vts(dcos_api_session):
         check_adminrouter_metrics()
 
 
-# TODO: D2IQ-65403 - muted Windows tests requiring investigation
-@pytest.mark.supportedwindows
-@pytest.mark.xfail("config.getoption('--windows-only')", strict=True, reason="D2IQ-65403")
+# TODO(D2IQ-65403): Expose Adminrouter metrics on Windows
+# @pytest.mark.supportedwindows
 def test_metrics_agent_adminrouter_nginx_vts_processor(dcos_api_session):
     """Assert that processed Admin Router metrics on agent are present."""
     # Make request to Admin Router on every agent to ensure metrics.
@@ -487,7 +503,6 @@ def test_metrics_diagnostics(dcos_api_session):
         check_diagnostics_metrics()
 
 
-@pytest.mark.supportedwindows
 def test_metrics_fluentbit(dcos_api_session):
     """Ensure that fluent bit metrics are present on masters and agents"""
     nodes = get_master_and_agents(dcos_api_session)
@@ -506,7 +521,7 @@ def test_metrics_fluentbit(dcos_api_session):
 
 
 def check_statsd_app_metrics(dcos_api_session, marathon_app, node, expected_metrics):
-    with dcos_api_session.marathon.deploy_and_cleanup(marathon_app, check_health=False):
+    with dcos_api_session.marathon.deploy_and_cleanup(marathon_app, check_health=False, timeout=DEPLOY_TIMEOUT):
         endpoints = dcos_api_session.marathon.get_app_service_endpoints(marathon_app['id'])
         assert len(endpoints) == 1, 'The marathon app should have been deployed exactly once.'
 
@@ -531,7 +546,6 @@ def check_statsd_app_metrics(dcos_api_session, marathon_app, node, expected_metr
         check_statsd_metrics()
 
 
-@pytest.mark.supportedwindows
 def test_metrics_agent_statsd(dcos_api_session):
     """Assert that statsd metrics on private agent are present."""
     task_name = 'test-metrics-statsd-app'
@@ -649,7 +663,6 @@ def get_task_hostname(dcos_api_session, framework_name, task_name):
     return node
 
 
-@pytest.mark.supportedwindows
 def test_task_metrics_metadata(dcos_api_session):
     """Test that task metrics have expected metadata/labels"""
     expanded_config = get_expanded_config()
@@ -672,7 +685,6 @@ def test_task_metrics_metadata(dcos_api_session):
         check_metrics_metadata()
 
 
-@pytest.mark.supportedwindows
 def test_executor_metrics_metadata(dcos_api_session):
     """Test that executor metrics have expected metadata/labels"""
     expanded_config = get_expanded_config()
@@ -696,10 +708,14 @@ def test_executor_metrics_metadata(dcos_api_session):
         check_executor_metrics_metadata()
 
 
-@pytest.mark.supportedwindows
 def test_metrics_node(dcos_api_session):
     """Test that the '/system/v1/metrics/v0/node' endpoint returns the expected
     metrics and metric metadata.
+
+    This test is not supported on Windows since dcos_metrics
+    plugin is not supported on Windows
+    https://github.com/dcos/telegraf/blame/d3666e/plugins/outputs/dcos_metrics/README.md#L5
+    TODO: https://jira.d2iq.com/browse/D2IQ-65777
     """
     def expected_datapoint_response(response):
         """Enure that the "node" endpoint returns a "datapoints" dict.
@@ -770,6 +786,7 @@ def get_agents(dcos_api_session):
 
 
 @pytest.mark.supportedwindows
+@pytest.mark.xfail("config.getoption('--windows-only')", reason="D2IQ-66051")
 def test_metrics_containers(dcos_api_session):
     """Assert that a Marathon app's container and app metrics can be retrieved."""
     @retrying.retry(wait_fixed=STD_INTERVAL, stop_max_delay=METRICS_WAITTIME)
@@ -844,13 +861,14 @@ def test_metrics_containers(dcos_api_session):
         "mem": 128.0,
         "instances": 1
     }
-    with dcos_api_session.marathon.deploy_and_cleanup(marathon_config, check_health=False):
+    with dcos_api_session.marathon.deploy_and_cleanup(marathon_config, check_health=False, timeout=DEPLOY_TIMEOUT):
         endpoints = dcos_api_session.marathon.get_app_service_endpoints(marathon_config['id'])
         assert len(endpoints) == 1, 'The marathon app should have been deployed exactly once.'
         test_containers(endpoints)
 
 
 @pytest.mark.supportedwindows
+@pytest.mark.xfail("config.getoption('--windows-only')", reason="D2IQ-66051")
 def test_statsd_metrics_containers_app(dcos_api_session):
     """Assert that statsd app metrics appear in the v0 metrics API."""
     task_name = 'test-statsd-metrics-containers-app'
@@ -899,7 +917,11 @@ def test_statsd_metrics_containers_app(dcos_api_session):
         ('.'.join([metric_name_pfx, 'histogram', 'count']), 4),
     ]
 
-    with dcos_api_session.marathon.deploy_and_cleanup(marathon_app, check_health=False):
+    deploy_marathon_app_and_check_metrics(dcos_api_session, expected_metrics, marathon_app, task_name)
+
+
+def deploy_marathon_app_and_check_metrics(dcos_api_session, expected_metrics, marathon_app, task_name):
+    with dcos_api_session.marathon.deploy_and_cleanup(marathon_app, check_health=False, timeout=DEPLOY_TIMEOUT):
         endpoints = dcos_api_session.marathon.get_app_service_endpoints(marathon_app['id'])
         assert len(endpoints) == 1, 'The marathon app should have been deployed exactly once.'
         node = endpoints[0].host
@@ -908,6 +930,7 @@ def test_statsd_metrics_containers_app(dcos_api_session):
 
 
 @pytest.mark.supportedwindows
+@pytest.mark.xfail("config.getoption('--windows-only')", reason="D2IQ-66051")
 def test_prom_metrics_containers_app_host(dcos_api_session):
     """Assert that prometheus app metrics appear in the v0 metrics API."""
     task_name = 'test-prom-metrics-containers-app-host'
@@ -936,7 +959,7 @@ def test_prom_metrics_containers_app_host(dcos_api_session):
             'python3 -m http.server $PORT0',
         ]),
         'container': {
-            'type': 'MESOS',
+            'type': 'DOCKER',
             'docker': {'image': 'library/python:3'}
         },
         'portDefinitions': [{
@@ -954,15 +977,11 @@ def test_prom_metrics_containers_app_host(dcos_api_session):
         ('_'.join([metric_name_pfx, 'histogram_seconds', 'count']), 4),
     ]
 
-    with dcos_api_session.marathon.deploy_and_cleanup(marathon_app, check_health=False):
-        endpoints = dcos_api_session.marathon.get_app_service_endpoints(marathon_app['id'])
-        assert len(endpoints) == 1, 'The marathon app should have been deployed exactly once.'
-        node = endpoints[0].host
-        for metric_name, metric_value in expected_metrics:
-            assert_app_metric_value_for_task(dcos_api_session, node, task_name, metric_name, metric_value)
+    deploy_marathon_app_and_check_metrics(dcos_api_session, expected_metrics, marathon_app, task_name)
 
 
 @pytest.mark.supportedwindows
+@pytest.mark.xfail("config.getoption('--windows-only')", reason="D2IQ-66051")
 def test_prom_metrics_containers_app_bridge(dcos_api_session):
     """Assert that prometheus app metrics appear in the v0 metrics API."""
     task_name = 'test-prom-metrics-containers-app-bridge'
@@ -1013,15 +1032,11 @@ def test_prom_metrics_containers_app_bridge(dcos_api_session):
         ('_'.join([metric_name_pfx, 'histogram_seconds', 'count']), 4),
     ]
 
-    with dcos_api_session.marathon.deploy_and_cleanup(marathon_app, check_health=False):
-        endpoints = dcos_api_session.marathon.get_app_service_endpoints(marathon_app['id'])
-        assert len(endpoints) == 1, 'The marathon app should have been deployed exactly once.'
-        node = endpoints[0].host
-        for metric_name, metric_value in expected_metrics:
-            assert_app_metric_value_for_task(dcos_api_session, node, task_name, metric_name, metric_value)
+    deploy_marathon_app_and_check_metrics(dcos_api_session, expected_metrics, marathon_app, task_name)
 
 
 @pytest.mark.supportedwindows
+@pytest.mark.xfail("config.getoption('--windows-only')", reason="D2IQ-66051")
 def test_task_prom_metrics_not_filtered(dcos_api_session):
     """Assert that prometheus app metrics aren't filtered according to adminrouter config.
 
@@ -1083,15 +1098,11 @@ def test_task_prom_metrics_not_filtered(dcos_api_session):
         ('nginx_vts_foo_request_seconds.gauge', 100),
     ]
 
-    with dcos_api_session.marathon.deploy_and_cleanup(marathon_app, check_health=False):
-        endpoints = dcos_api_session.marathon.get_app_service_endpoints(marathon_app['id'])
-        assert len(endpoints) == 1, 'The marathon app should have been deployed exactly once.'
-        node = endpoints[0].host
-        for metric_name, metric_value in expected_metrics:
-            assert_app_metric_value_for_task(dcos_api_session, node, task_name, metric_name, metric_value)
+    deploy_marathon_app_and_check_metrics(dcos_api_session, expected_metrics, marathon_app, task_name)
 
 
 @pytest.mark.supportedwindows
+@pytest.mark.xfail("config.getoption('--windows-only')", reason="D2IQ-66051")
 def test_metrics_containers_nan(dcos_api_session):
     """Assert that the metrics API can handle app metric gauges with NaN values."""
     task_name = 'test-metrics-containers-nan'
@@ -1115,7 +1126,7 @@ def test_metrics_containers_nan(dcos_api_session):
         },
         'networks': [{'mode': 'host'}],
     }
-    with dcos_api_session.marathon.deploy_and_cleanup(marathon_app, check_health=False):
+    with dcos_api_session.marathon.deploy_and_cleanup(marathon_app, check_health=False, timeout=DEPLOY_TIMEOUT):
         endpoints = dcos_api_session.marathon.get_app_service_endpoints(marathon_app['id'])
         assert len(endpoints) == 1, 'The marathon app should have been deployed exactly once.'
         node = endpoints[0].host
@@ -1247,15 +1258,18 @@ def get_metrics_for_task(dcos_api_session, node: str, task_name: str):
     )
 
 
-# TODO: D2IQ-65401 - muted Windows tests requiring investigation
-@pytest.mark.supportedwindows
-@pytest.mark.xfail("config.getoption('--windows-only')", strict=True, reason="D2IQ-65401")
 def test_standalone_container_metrics(dcos_api_session):
     """
     An operator should be able to launch a standalone container using the
     LAUNCH_CONTAINER call of the agent operator API. Additionally, if the
     process running within the standalone container emits statsd metrics, they
     should be accessible via the DC/OS metrics API.
+
+    This test is not supported on Windows since dcos_metrics
+    plugin is not supported on Windows
+    https://github.com/dcos/telegraf/blame/d3666e/plugins/outputs/dcos_metrics/README.md#L5
+    TODO: https://jira.d2iq.com/browse/D2IQ-65777
+    TODO: https://jira.d2iq.com/browse/D2IQ-65401
     """
     expanded_config = get_expanded_config()
     if expanded_config.get('security') == 'strict':
@@ -1398,12 +1412,16 @@ def test_standalone_container_metrics(dcos_api_session):
         _post_agent(kill_data)
 
 
-@pytest.mark.supportedwindows
 def test_pod_application_metrics(dcos_api_session):
     """Launch a pod, wait for its containers to be added to the metrics service,
     and then verify that:
     1) Container statistics metrics are provided for the executor container
     2) Application metrics are exposed for the task container
+
+    This test is not supported on Windows since dcos_metrics
+    plugin is not supported on Windows
+    https://github.com/dcos/telegraf/blame/d3666e/plugins/outputs/dcos_metrics/README.md#L5
+    TODO: https://jira.d2iq.com/browse/D2IQ-65777
     """
     @retrying.retry(wait_fixed=STD_INTERVAL, stop_max_delay=METRICS_WAITTIME)
     def test_application_metrics(agent_ip, agent_id, task_name, num_containers):
@@ -1559,6 +1577,7 @@ def test_pod_application_metrics(dcos_api_session):
 
                 return True
 
+    # FIXME(D2IQ-65812): Make the following app works on Windows
     marathon_pod_config = {
         "id": "/statsd-emitter-task-group",
         "containers": [{
