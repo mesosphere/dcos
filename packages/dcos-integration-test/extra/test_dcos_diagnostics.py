@@ -322,7 +322,7 @@ def test_dcos_diagnostics_report(dcos_api_session):
 
 @pytest.mark.parametrize('use_legacy_api', [
     pytest.param(False),
-    pytest.param(True, marks=pytest.mark.xfail("config.getoption('--windows-only')"))])
+    pytest.param(True, marks=pytest.mark.skipif("config.getoption('--windows-only')"))])
 def test_dcos_diagnostics_bundle_create_download_delete(dcos_api_session, use_legacy_api):
     """
     test bundle create, read, delete workflow
@@ -484,12 +484,12 @@ def _download_bundle_from_master(dcos_api_session, master_index, bundle, diagnos
         '5051-flags.json',
         '5051-metrics_snapshot.json',
         'dcos-diagnostics-health.json',
-        'C:\\d2iq\\dcos\\var\log\\adminrouter\\adminrouter-nssm.log',
-        'C:\\d2iq\\dcos\\var\log\\telegraf\\telegraf.log',
-        'C:\\d2iq\\dcos\\var\log\dcos-diagnostics\\dcos-diagnostics.log',
+        'C:\\d2iq\\dcos\\var\\log\\adminrouter\\adminrouter-nssm.log',
+        'C:\\d2iq\\dcos\\var\\log\\telegraf\\telegraf.log',
+        'C:\\d2iq\\dcos\\var\\log\\dcos-diagnostics\\dcos-diagnostics.log',
         'C:\\d2iq\\dcos\\var\\log\\winpanda\\winpanda.log',
         'C:\\d2iq\\dcos\\var\\log\\adminrouter\\adminrouter-access.log',
-        'C:\\d2iq\\dcos\\var\\log\dcos_install.log',
+        'C:\\d2iq\\dcos\\var\\log\\dcos_install.log',
         'C:\\d2iq\\dcos\\var\\log\\adminrouter\\adminrouter-error.log',
         'C:\\d2iq\\dcos\\var\\log\\mesos\\mesos-agent.log'
     ]
@@ -497,7 +497,7 @@ def _download_bundle_from_master(dcos_api_session, master_index, bundle, diagnos
     # for public agent host
     expected_public_agent_files = [
         'dcos-mesos-slave-public.service',
-        'binsh_-c_cat proc`systemctl show dcos-mesos-slave-public.service -p MainPID| cut -d\'=\' -f2`environ.output'
+        "binsh_-c_cat proc`systemctl show dcos-mesos-slave-public.service -p MainPID| cut -d'=' -f2`environ.output"
     ] + expected_agent_common_files + expected_common_files
 
     def _read_from_zip(z: zipfile.ZipFile, item: str, to_json=True):
