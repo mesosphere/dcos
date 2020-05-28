@@ -1,9 +1,13 @@
 {
-  "requires" : [ "java", "exhibitor" ],
-  "single_source" : {
-    "kind" : "url_extract",
-    "url" : "https://s3.amazonaws.com/downloads.mesosphere.io/metronome/builds/0.6.46-692933d/metronome-0.6.46-692933d.tgz",
-    "sha1" : "001d2236a8d0ef3f2d5da5bc60eb4801f3798f91"
+  "requires": [
+    "java",
+    "exhibitor"
+  ],
+  "single_source": {
+    "kind": "url_extract",
+    "url": "https://s3.amazonaws.com/downloads.mesosphere.io/metronome/builds/0.6.44-f89f00d/metronome-0.6.44-f89f00d.tgz",
+    "sha1": "be86404db870a6b4deca34cfc53716ad881c768a"
   },
-  "username" : "dcos_metronome"
+  "username": "dcos_metronome",
+  "state_directory": true
 }
