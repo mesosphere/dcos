@@ -314,7 +314,7 @@ package:
         "libraries":
         [
           {
-            "file": "/opt/mesosphere/active/mesos-modules/lib/mesos/libmesos_network_overlay.so",
+            "file": "/opt/mesosphere/active/mesos-modules/lib/mesos/liboverlay.so",
             "modules":
               [
                 {
@@ -347,7 +347,7 @@ package:
         "libraries":
         [
           {
-            "file": "/opt/mesosphere/active/mesos-modules/lib/mesos/libmesos_network_overlay.so",
+            "file": "/opt/mesosphere/active/mesos-modules/lib/mesos/liboverlay.so",
             "modules":
               [
                 {
@@ -370,7 +370,7 @@ package:
     content: |
       {
         "libraries": [ {
-          "file": "/opt/mesosphere/active/mesos-modules/lib/mesos/libmetrics-module.so",
+          "file": "/opt/mesosphere/active/mesos-modules/lib/mesos/libmetrics.so",
           "modules": [ {
             "name": "com_mesosphere_dcos_MetricsIsolatorModule",
             "parameters": [
@@ -1438,7 +1438,7 @@ package:
     content: |
       MESOS_RESOURCES=[{"name":"ports","type":"RANGES","ranges": {"range": [{"begin": 1, "end": 21},{"begin": 23, "end": 5050},{"begin": 5052, "end": 32000}]}}]
       MESOS_DEFAULT_ROLE=slave_public
-      MESOS_ATTRIBUTES=public_ip:true;os:linux
+      MESOS_ATTRIBUTES=public_ip:true
   - path: /etc/mesos-executor-environment.json
     content: |
       {
@@ -1800,6 +1800,16 @@ package:
               },
               {
                   "Location": "/var/log/mesos-state.tar.gz",
+                  "Role": ["master"],
+                  "Optional": true
+              },
+              {
+                  "Location": "/var/lib/dcos/etcd/initial-state",
+                  "Role": ["master"],
+                  "Optional": true
+              },
+              {
+                  "Location": "/var/lib/dcos/etcd/initial-nodes",
                   "Role": ["master"],
                   "Optional": true
               }
