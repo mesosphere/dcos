@@ -1,7 +1,7 @@
-From 93ea2ab8bb1e70d25fa0f0968d7993e863728942 Mon Sep 17 00:00:00 2001
+From e99035027fbd18c904f2d0a4a050421999308eb9 Mon Sep 17 00:00:00 2001
 From: Benjamin Mahler <bmahler@apache.org>
 Date: Fri, 27 Apr 2018 16:07:05 -0700
-Subject: [PATCH 10/24] Updated mesos source for Gauge -> PullGauge renaming.
+Subject: [PATCH 10/25] Updated mesos source for Gauge -> PullGauge renaming.
 
 Review: https://reviews.apache.org/r/66832/
 ---
@@ -954,5 +954,5 @@ index d638b8806..8d42011be 100644
    {
      return static_cast<double>(frameworks.size());
 -- 
-2.21.0
+2.25.1
 
