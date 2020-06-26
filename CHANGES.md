@@ -2,7 +2,9 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 
 ## DC/OS 2.2.0-dev (in development)
 
-* Updated to Mesos [1.11.0-dev](https://github.com/apache/mesos/blob/3d68993c8743231b6067738050786e750edda9b1/CHANGELOG)
+* Updated to Mesos [1.11.0-dev](https://github.com/apache/mesos/blob/a679eb4bc35bd2d7c4cffdd9440ab301d8fc8986/CHANGELOG)
+
+* Update to Fluentbit [1.4.6](https://docs.fluentbit.io/manual/installation/upgrade-notes)
 
 
 ### Security updates
@@ -22,3 +24,5 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 * Removed Exhibitor snapshot cleanup and now rely on ZooKeeper autopurge. (D2IQ-68109)
 
 * Ensured that marathon and SDK labeled reservations are not offered to other schedulers (D2IQ-68800)
+
+* Updated OpenResty to 1.15.8.4. (DCOS_OSS-5967)
