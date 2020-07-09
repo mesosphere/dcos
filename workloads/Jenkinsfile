@@ -1,0 +1,12 @@
+#!/usr/bin/env groovy
+
+def builders = [:]
+
+// For every workload we need to repeat it
+builders['example-team :: example-workload'] = {
+  build 'example-team/example-workload/workload-test'
+}
+
+node('mesos') {
+  parallel builders
+}
