@@ -3,10 +3,14 @@
 def builders = [:]
 
 // For every workload we need to repeat it
-builders['example-team :: example-workload'] = {
-  build 'example-team/example-workload/workload-test'
+builders['example-team-1 :: example-workload-A'] = {
+  pipeline = load 'workloads/example-team-1/example-workload-A/workload-test.groovy'
+}
+builders['example-team-2 :: example-workload-B'] = {
+  pipeline = load 'workloads/example-team-2/example-workload-B/workload-test.groovy'
 }
 
-node('mesos') {
+node('linux') {
+  checkout scm
   parallel builders
 }
