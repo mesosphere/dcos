@@ -2,15 +2,16 @@
 
 def builders = [:]
 
-// For every workload we need to repeat it
-builders['example-team-1 :: example-workload-A'] = {
-  pipeline = load 'workloads/example-team-1/example-workload-A/workload-test.groovy'
-}
-builders['example-team-2 :: example-workload-B'] = {
-  pipeline = load 'workloads/example-team-2/example-workload-B/workload-test.groovy'
-}
-
 node('linux') {
   checkout scm
+
+  // For every workload we need to repeat it
+  builders['example-team-1 :: example-workload-A'] = {
+    pipeline = load 'workloads/example-team-1/example-workload-A/workload-test.groovy'
+  }
+  builders['example-team-2 :: example-workload-B'] = {
+    pipeline = load 'workloads/example-team-2/example-workload-B/workload-test.groovy'
+  }
+
   parallel builders
 }
