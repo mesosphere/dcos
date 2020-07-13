@@ -5,13 +5,11 @@ def builders = [:]
 node('linux') {
   checkout scm
 
-  def jenkinsfile = load 'workloads/example-team-1/example-workload-A/workload-test.groovy'
   builders['example-team-1 :: example-workload-A'] = {
-      jenkinsfile.execute()
+      (load 'workloads/example-team-1/example-workload-A/workload-test.groovy').execute()
   }
-  def jenkinsfile = load 'workloads/example-team-2/example-workload-B/workload-test.groovy'
   builders['example-team-2 :: example-workload-B'] = {
-      jenkinsfile.execute()
+      (load 'workloads/example-team-1/example-workload-A/workload-test.groovy').execute()
   }
 }
 
