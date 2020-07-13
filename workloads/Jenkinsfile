@@ -9,7 +9,7 @@ node('linux') {
   builders['example-team-1 :: example-workload-A'] = {
       exampleWorkloadA.execute()
   }
-  def example-workload-B = load 'workloads/example-team-2/example-workload-B/workload-test.groovy'
+  def exampleWorkloadB = load 'workloads/example-team-2/example-workload-B/workload-test.groovy'
   builders['example-team-2 :: example-workload-B'] = {
       exampleWorkloadB.execute()
   }
