@@ -1,6 +1,5 @@
 jobs:
-  - script: >
-    folder('example-team-1')
+  - script: folder('example-team-1')
   - script: >
       multibranchPipelineJob('example-team-1/example-workload-A-test') {
         branchSources {
@@ -46,8 +45,7 @@ jobs:
         }
       }
 
-  - script: >
-    folder('example-team-2')
+  - script: folder('example-team-2')
   - script: >
       multibranchPipelineJob('example-team-2/example-workload-B-teset') {
         branchSources {
