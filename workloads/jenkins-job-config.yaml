@@ -1,119 +1,59 @@
 jobs:
   - script: folder('example-team-1')
   - script: >
-      multibranchPipelineJob('example-team-1/example-workload-A-test') {
-        branchSources {
-            git {
-                id = 'SOAK Workloads'
-                remote('https://github.com/janisz/dcos.git')
-                includes('workloads_tests')
+      pipelineJob('example-team-1/example-workload-A-test') {
+        definition {
+            cpsScm {
+              scm {
+                scriptPath('workloads/example-team-1/example-workload-A/workload-test.groovy')
+              }
             }
-        }
-        triggers {
-          cron('@daily')
-        }
-        orphanedItemStrategy {
-          discardOldItems {
-            numToKeep(20)
-          }
-        }
-        factory {
-          workflowBranchProjectFactory {
-            scriptPath('workloads/example-team-1/example-workload-A/workload-test.groovy')
           }
         }
       }
   - script: >
-      multibranchPipelineJob('example-team-1/example-workload-D-test') {
-        branchSources {
-            git {
-                id = 'SOAK Workloads'
-                remote('https://github.com/janisz/dcos.git')
-                includes('workloads_tests')
+      pipelineJob('example-team-1/example-workload-D-test') {
+        definition {
+            cpsScm {
+              scm {
+                scriptPath('workloads/example-team-1/example-workload-D/workload-test.groovy')
+              }
             }
-        }
-        triggers {
-          cron('@daily')
-        }
-        orphanedItemStrategy {
-          discardOldItems {
-            numToKeep(20)
-          }
-        }
-        factory {
-          workflowBranchProjectFactory {
-            scriptPath('workloads/example-team-1/example-workload-D/workload-test.groovy')
           }
         }
       }
 
   - script: folder('example-team-2')
   - script: >
-      multibranchPipelineJob('example-team-2/example-workload-B-teset') {
-        branchSources {
-            git {
-                id = 'SOAK Workloads'
-                remote('https://github.com/janisz/dcos.git')
-                includes('workloads_tests')
+      pipelineJob('example-team-2/example-workload-B-teset') {
+        definition {
+            cpsScm {
+              scm {
+                scriptPath('workloads/example-team-2/example-workload-B/workload-test.groovy')
+              }
             }
-        }
-        triggers {
-          cron('@daily')
-        }
-        orphanedItemStrategy {
-          discardOldItems {
-            numToKeep(20)
-          }
-        }
-        factory {
-          workflowBranchProjectFactory {
-            scriptPath('workloads/example-team-2/example-workload-B/workload-test.groovy')
           }
         }
       }
   - script: >
-      multibranchPipelineJob('example-team-2/example-workload-C-test') {
-        branchSources {
-            git {
-                id = 'SOAK Workloads'
-                remote('https://github.com/janisz/dcos.git')
-                includes('workloads_tests')
+      pipelineJob('example-team-2/example-workload-C-test') {
+        definition {
+            cpsScm {
+              scm {
+                scriptPath('workloads/example-team-2/example-workload-C/workload-test.groovy')
+              }
             }
-        }
-        triggers {
-          cron('@daily')
-        }
-        orphanedItemStrategy {
-          discardOldItems {
-            numToKeep(20)
-          }
-        }
-        factory {
-          workflowBranchProjectFactory {
-            scriptPath('workloads/example-team-2/example-workload-C/workload-test.groovy')
           }
         }
       }
   - script: >
-      multibranchPipelineJob('SOAK Workloads') {
-        branchSources {
-            git {
-                id = 'SOAK Workloads'
-                remote('https://github.com/janisz/dcos.git')
-                includes('workloads_tests')
+      pipelineJob('SOAK Workloads') {
+        definition {
+            cpsScm {
+              scm {
+                scriptPath('workloads/Jenkinsfile')
+              }
             }
-        }
-        triggers {
-          cron('@daily')
-        }
-        orphanedItemStrategy {
-          discardOldItems {
-            numToKeep(20)
-          }
-        }
-        factory {
-          workflowBranchProjectFactory {
-            scriptPath('workloads/Jenkinsfile')
           }
         }
       }
