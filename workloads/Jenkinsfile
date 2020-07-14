@@ -6,16 +6,16 @@ pipeline {
             script {
               def builds = [:]
               builds['example-team-1/example-workload-A-test'] = {
-                build job: 'example-team-1/example-workload-A-test'
+                build job: 'example-team-1/example-workload-A-test/workloads_tests', wait: true
               }
               builds['example-team-1/example-workload-D-test'] = {
-                build job: 'example-team-1/example-workload-A-test'
+                build job: 'example-team-1/example-workload-A-test/workloads_tests', wait: true
               }
               builds['example-team-2/example-workload-B-test'] = {
-                build job: 'example-team-1/example-workload-A-test'
+                build job: 'example-team-1/example-workload-A-test/workloads_tests', wait: true
               }
               builds['example-team-2/example-workload-C-test'] = {
-                build job: 'example-team-1/example-workload-A-test'
+                build job: 'example-team-1/example-workload-A-test/workloads_tests', wait: true
               }
               parallel builds
             }

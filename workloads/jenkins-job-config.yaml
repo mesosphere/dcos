@@ -25,7 +25,7 @@ jobs:
 
   - script: folder('example-team-2')
   - script: >
-      pipelineJob('example-team-2/example-workload-B-teset') {
+      pipelineJob('example-team-2/example-workload-B-test') {
         definition {
             cpsScm {
               scm {
