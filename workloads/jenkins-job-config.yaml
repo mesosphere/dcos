@@ -3,10 +3,9 @@ jobs:
   - script: >
       pipelineJob('example-team-1/example-workload-A-test') {
         definition {
-            cpsScm {
-              scm {
-                scriptPath('workloads/example-team-1/example-workload-A/workload-test.groovy')
-              }
+          cpsScm {
+            scm {
+              scriptPath('workloads/example-team-1/example-workload-A/workload-test.groovy')
             }
           }
         }
@@ -14,10 +13,9 @@ jobs:
   - script: >
       pipelineJob('example-team-1/example-workload-D-test') {
         definition {
-            cpsScm {
-              scm {
-                scriptPath('workloads/example-team-1/example-workload-D/workload-test.groovy')
-              }
+          cpsScm {
+            scm {
+              scriptPath('workloads/example-team-1/example-workload-D/workload-test.groovy')
             }
           }
         }
@@ -27,10 +25,9 @@ jobs:
   - script: >
       pipelineJob('example-team-2/example-workload-B-test') {
         definition {
-            cpsScm {
-              scm {
-                scriptPath('workloads/example-team-2/example-workload-B/workload-test.groovy')
-              }
+          cpsScm {
+            scm {
+              scriptPath('workloads/example-team-2/example-workload-B/workload-test.groovy')
             }
           }
         }
@@ -38,10 +35,9 @@ jobs:
   - script: >
       pipelineJob('example-team-2/example-workload-C-test') {
         definition {
-            cpsScm {
-              scm {
-                scriptPath('workloads/example-team-2/example-workload-C/workload-test.groovy')
-              }
+          cpsScm {
+            scm {
+              scriptPath('workloads/example-team-2/example-workload-C/workload-test.groovy')
             }
           }
         }
@@ -49,10 +45,9 @@ jobs:
   - script: >
       pipelineJob('SOAK Workloads') {
         definition {
-            cpsScm {
-              scm {
-                scriptPath('workloads/Jenkinsfile')
-              }
+          cpsScm {
+            scm {
+              scriptPath('workloads/Jenkinsfile')
             }
           }
         }
