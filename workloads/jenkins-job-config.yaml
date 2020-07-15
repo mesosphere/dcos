@@ -1,14 +1,14 @@
 jobs:
   - script: folder('example-team-1')
   - script: >
-      pipelineJob('example-team-1/example-workload-A-test') {
-        definition {
-          cpsScm {
-            scm {
-              scriptPath('workloads/example-team-1/example-workload-A/workload-test.groovy')
-            }
+      pipelineJob('example') {
+          definition {
+              cpsScm {
+                  scm {
+                      git('https://github.com/jenkinsci/job-dsl-plugin.git')
+                  }
+              }
           }
-        }
       }
   - script: >
       pipelineJob('example-team-1/example-workload-D-test') {
