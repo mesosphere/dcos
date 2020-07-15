@@ -5,6 +5,7 @@ jobs:
         definition {
           cpsScm {
             scm {
+              git('https://github.com/janisz/dcos.git', 'workloads_tests')  
               scriptPath('workloads/example-team-1/example-workload-A/workload-test.groovy')
             }
           }
@@ -15,6 +16,7 @@ jobs:
         definition {
           cpsScm {
             scm {
+              git('https://github.com/janisz/dcos.git', 'workloads_tests')
               scriptPath('workloads/example-team-1/example-workload-D/workload-test.groovy')
             }
           }
@@ -27,6 +29,7 @@ jobs:
         definition {
           cpsScm {
             scm {
+              git('https://github.com/janisz/dcos.git', 'workloads_tests')
               scriptPath('workloads/example-team-2/example-workload-B/workload-test.groovy')
             }
           }
@@ -37,6 +40,7 @@ jobs:
         definition {
           cpsScm {
             scm {
+              git('https://github.com/janisz/dcos.git', 'workloads_tests')
               scriptPath('workloads/example-team-2/example-workload-C/workload-test.groovy')
             }
           }
@@ -47,6 +51,7 @@ jobs:
         definition {
           cpsScm {
             scm {
+              git('https://github.com/janisz/dcos.git', 'workloads_tests')
               scriptPath('workloads/Jenkinsfile')
             }
           }
