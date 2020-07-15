@@ -4,7 +4,6 @@ jobs:
       pipelineJob('example-team-1/example-workload-A-test') {
         definition {
           cpsScm {
-            lightweight(true)
             scm {
               github('janisz/dcos', 'workloads_tests')
               scriptPath('workloads/example-team-1/example-workload-A/workload-test.groovy')
@@ -16,7 +15,6 @@ jobs:
       pipelineJob('example-team-1/example-workload-D-test') {
         definition {
           cpsScm {
-            lightweight(true)
             scm {
               github('janisz/dcos', 'workloads_tests')
               scriptPath('workloads/example-team-1/example-workload-D/workload-test.groovy')
@@ -30,7 +28,6 @@ jobs:
       pipelineJob('example-team-2/example-workload-B-test') {
         definition {
           cpsScm {
-            lightweight(true)
             scm {
               github('janisz/dcos', 'workloads_tests')
               scriptPath('workloads/example-team-2/example-workload-B/workload-test.groovy')
@@ -42,7 +39,6 @@ jobs:
       pipelineJob('example-team-2/example-workload-C-test') {
         definition {
           cpsScm {
-            lightweight(true)
             scm {
               github('janisz/dcos', 'workloads_tests')
               scriptPath('workloads/example-team-2/example-workload-C/workload-test.groovy')
@@ -54,7 +50,6 @@ jobs:
       pipelineJob('SOAK Workloads') {
         definition {
           cpsScm {
-            lightweight(true)
             scm {
               github('janisz/dcos', 'workloads_tests')
               scriptPath('workloads/Jenkinsfile')
