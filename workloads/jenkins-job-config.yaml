@@ -62,3 +62,8 @@ jobs:
           }
         }
       }
+unclassified:
+  gitscm:
+    globalConfigName: jenkins
+    globalConfigEmail: jenkins@soak
+    createAccountBasedOnEmail: true
