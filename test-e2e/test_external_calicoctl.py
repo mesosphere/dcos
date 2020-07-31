@@ -3,6 +3,7 @@ Test external calicoctl
 """
 import os
 import platform
+import shutil
 import stat
 import subprocess
 import uuid
@@ -131,3 +132,94 @@ def test_access(docker_backend: Docker,
         result = calicoctl(['get', 'nodes'], env)
         assert 'NAME' in result['stdout']
         assert result['returncode'] == 0
+
+
+@pytest.mark.skipif(
+    only_changed(E2E_SAFE_DEFAULT + [
+        # All packages safe except named packages
+        'packages/**',
+        '!packages/*treeinfo.json',
+        '!packages/{adminrouter,bouncer,etcd,openssl}/**',
+        '!packages/python*/**',
+        # All e2e tests safe except this test
+        'test-e2e/test_*', '!' + escape(trailing_path(__file__, 2)),
+    ]),
+    reason='Only safe files modified',
+)
+def test_dcos_cli_access(
+    docker_backend: Docker,
+    artifact_path: Path,
+    request: SubRequest,
+    log_dir: Path,
+    rsa_keypair: Tuple[str, str],
+    jwt_token: Callable[[str, str, int], str],
+    calicoctl: Callable[[List[str], Optional[dict]], dict],
+    tmp_path: Path,
+) -> None:
+    with Cluster(
+            cluster_backend=docker_backend,
+            masters=1,
+            agents=0,
+            public_agents=0,
+    ) as cluster:
+        uid = str(uuid.uuid4())
+
+        config = {
+            'superuser_service_account_uid': uid,
+            'superuser_service_account_public_key': rsa_keypair[1],
+        }
+
+        cluster.install_dcos_from_path(
+            dcos_installer=artifact_path,
+            dcos_config={
+                **cluster.base_config,
+                **config,
+            },
+            output=Output.LOG_AND_CAPTURE,
+            ip_detect_path=docker_backend.ip_detect_path,
+        )
+
+        # Download the CLI before waiting for cluster installation to complete.
+        cli = tmp_path / 'dcos'
+        with requests.get(
+            'https://downloads.dcos.io/cli/releases/binaries/dcos/linux/x86-64/latest/dcos',
+            allow_redirects=True,
+            stream=True
+        ) as r:
+            with cli.open('wb') as f:
+                shutil.copyfileobj(r.raw, f)
+        cli.chmod(0o755)
+
+        wait_for_dcos_oss(
+            cluster=cluster,
+            request=request,
+            log_dir=log_dir,
+        )
+
+        master = next(iter(cluster.masters))
+        master_ip = master.public_ip_address
+
+        private_key = tmp_path / 'private_key'
+        with private_key.open('w', encoding='ascii') as f:
+            f.write(rsa_keypair[0])
+        private_key.chmod(0o600)
+
+        subprocess.run(
+            [
+                str(cli), 'cluster', 'setup',
+                '--username', uid,
+                '--private-key', str(private_key),
+                'http://{}'.format(master_ip)
+            ],
+            check=True
+        )
+
+        # dcos calico version
+        print('version')
+        subprocess.run([str(cli), '-vv', 'calico', '--log-level=debug', 'version'], check=True)
+        print('done')
+
+        master.run(
+            ['journalctl', '-u', 'dcos-adminrouter'],
+            output=Output.LOG_AND_CAPTURE,
+        )
