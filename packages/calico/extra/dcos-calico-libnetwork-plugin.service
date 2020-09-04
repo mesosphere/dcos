@@ -1,5 +1,6 @@
 [Unit]
 Description=DC/OS Calico Node: Docker libnetwork plugin for Calico in DC/OS
+ConditionPathExists=/opt/mesosphere/etc/calico/calico_enabled
 
 [Service]
 Environment=CALICO_LIBNETWORK_LABEL_ENDPOINTS=true
@@ -8,7 +9,7 @@ EnvironmentFile=/opt/mesosphere/etc/calico/calico-node.env
 EnvironmentFile=/opt/mesosphere/etc/calico/calico-node-datastore.env
 ExecStart=/opt/mesosphere/bin/start-calico-libnetwork-plugin.sh
 ExecStartPost=/opt/mesosphere/bin/create-calico-docker-network.py
-TimeoutStartSec=60s
+TimeoutStartSec=180s
 
 Restart=always
 StartLimitInterval=0

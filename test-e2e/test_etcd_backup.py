@@ -5,13 +5,11 @@ import logging
 import uuid
 from pathlib import Path
 from shlex import split
-from typing import Generator, List, Set
+from typing import List, Set
 
 import pytest
 from _pytest.fixtures import SubRequest
-
-from cluster_helpers import wait_for_dcos_oss
-from dcos_e2e.backends import Docker
+from conditional import E2E_SAFE_DEFAULT, escape, only_changed, trailing_path
 from dcos_e2e.cluster import Cluster
 from dcos_e2e.node import Node, Output
 
@@ -39,33 +37,6 @@ def get_etcdctl_with_base_args(
 
 def get_dcos_etcdctl() -> List[str]:
     return [DCOS_SHELL_PATH, "dcos-etcdctl"]
-
-
-@pytest.fixture
-def three_master_cluster(
-    artifact_path: Path,
-    docker_backend: Docker,
-    request: SubRequest,
-    log_dir: Path,
-) -> Generator[Cluster, None, None]:
-    """Spin up a highly-available DC/OS cluster with three master nodes."""
-    with Cluster(
-        cluster_backend=docker_backend,
-        masters=3,
-        agents=0,
-        public_agents=0,
-    ) as cluster:
-        cluster.install_dcos_from_path(
-            dcos_installer=artifact_path,
-            dcos_config=cluster.base_config,
-            ip_detect_path=docker_backend.ip_detect_path,
-        )
-        wait_for_dcos_oss(
-            cluster=cluster,
-            request=request,
-            log_dir=log_dir,
-        )
-        yield cluster
 
 
 def _do_backup(master: Node, backup_local_path: Path) -> None:
@@ -131,7 +102,7 @@ class EtcdClient():
         master = list(self.masters)[0]
         etcdctl_with_args = get_etcdctl_with_base_args(endpoint_ip=MASTER_DNS)
         etcdctl_with_args += ["put", key, value]
-        master.run(args=etcdctl_with_args)
+        master.run(args=etcdctl_with_args, output=Output.LOG_AND_CAPTURE)
 
     def get_key_from_node(
             self,
@@ -151,15 +122,26 @@ class EtcdClient():
 
 
 @pytest.fixture()
-def etcd_client(three_master_cluster: Cluster) -> EtcdClient:
-    etcd_client = EtcdClient(three_master_cluster.masters)
+def etcd_client(static_three_master_cluster: Cluster) -> EtcdClient:
+    etcd_client = EtcdClient(static_three_master_cluster.masters)
     return etcd_client
 
 
+@pytest.mark.skipif(
+    only_changed(E2E_SAFE_DEFAULT + [
+        # All packages safe except named packages
+        'packages/**',
+        '!packages/*treeinfo.json',
+        '!packages/etcd/**',  # All packages safe except named packages
+        # All e2e tests safe except this test
+        'test-e2e/test_*', '!' + escape(trailing_path(__file__, 2)),
+    ]),
+    reason='Only safe files modified',
+)
 class TestEtcdBackup:
     def test_snapshot_backup_and_restore(
         self,
-        three_master_cluster: Cluster,
+        static_three_master_cluster: Cluster,
         etcd_client: EtcdClient,
         tmp_path: Path,
         request: SubRequest,
@@ -174,11 +156,11 @@ class TestEtcdBackup:
         backup_local_path = tmp_path / backup_name
 
         # Take etcd backup from one master node.
-        _do_backup(next(iter(three_master_cluster.masters)), backup_local_path)
+        _do_backup(next(iter(static_three_master_cluster.masters)), backup_local_path)
 
         # Restore etcd from backup on all master nodes.
-        _do_restore(three_master_cluster.masters, backup_local_path)
+        _do_restore(static_three_master_cluster.masters, backup_local_path)
 
         # assert all etcd containers
-        for master in three_master_cluster.masters:
+        for master in static_three_master_cluster.masters:
             assert etcd_client.get_key_from_node(test_key, master) == test_val

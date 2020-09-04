@@ -254,6 +254,26 @@ package:
         },
         "max_configuration_attempts": {{ dcos_overlay_config_attempts }}
       }
+  - path: /etc/dcos/storage/csi/nfs.conf
+    content: |
+      {
+        "type": "nfs.csi.k8s.io",
+        "containers": [
+          {
+            "services": [
+              "NODE_SERVICE"
+            ],
+            "command": {
+              "shell": true,
+              "value": "/opt/mesosphere/bin/nfsplugin --nodeid=$MESOS_AGENT_ID --endpoint=$CSI_ENDPOINT"
+            },
+            "resources": [
+              {"name": "cpus", "type": "SCALAR", "scalar": {"value": 1}},
+              {"name": "mem", "type": "SCALAR", "scalar": {"value": 128}}
+            ]
+          }
+        ]
+      }
   - path: /etc/mesos-master-modules/dummy.json
     content: |
       {}
@@ -1374,7 +1394,13 @@ package:
       MESOS_MODULES_DIR=/opt/mesosphere/etc/mesos-slave-modules
       MESOS_NETWORK_CNI_ROOT_DIR_PERSIST={{ mesos_cni_root_dir_persist }}
       MESOS_NETWORK_CNI_CONFIG_DIR=/opt/mesosphere/etc/dcos/network/cni
+{% switch calico_enabled %}
+{% case "true" %}
       MESOS_NETWORK_CNI_PLUGINS_DIR=/opt/mesosphere/active/cni/:/opt/mesosphere/active/dcos-cni/:/opt/mesosphere/active/mesos/libexec/mesos:/opt/mesosphere/active/calico/cni
+{% case "false" %}
+      MESOS_NETWORK_CNI_PLUGINS_DIR=/opt/mesosphere/active/cni/:/opt/mesosphere/active/dcos-cni/:/opt/mesosphere/active/mesos/libexec/mesos
+{% endswitch %}
+      MESOS_CSI_PLUGIN_CONFIG_DIR=/opt/mesosphere/etc/dcos/storage/csi
       MESOS_RECONFIGURATION_POLICY=additive
       MESOS_RECOVERY_TIMEOUT={{ mesos_recovery_timeout }}
       MESOS_SECCOMP_CONFIG_DIR=/opt/mesosphere/etc/dcos/mesos/seccomp
@@ -1467,23 +1493,6 @@ package:
   - path: /etc/dns_search_config
     content: |
       {{ dcos_gen_resolvconf_search_str }}
-  - path: /etc/dcos-signal-config.json
-    content: |
-      {
-        "gen_platform": "{{ platform }}",
-        "gen_provider": "{{ provider }}",
-        "diagnostics_urls": [
-          "http://leader.mesos:1050/system/health/v1/report?cache=0"
-        ],
-        "cosmos_urls": [
-          "http://127.0.0.1:7070/package/list"
-        ],
-        "mesos_urls": [
-          "http://leader.mesos:{{ mesos_master_port }}/frameworks",
-          "http://leader.mesos:{{ mesos_master_port }}/metrics/snapshot"
-        ],
-        "enabled": "{{ telemetry_enabled }}"
-      }
   - path: /etc/dcos-check-config.json
     content: {{ check_config_contents }}
   - path: /etc/dcos-check-runner.env
@@ -1874,6 +1883,8 @@ package:
                   "Command": ["ipset", "list"],
                   "Optional": true
               },
+{% switch calico_enabled %}
+{% case "true" %}
               {
                   "Command": ["/opt/mesosphere/bin/calicoctl", "get", "node", "-o", "yaml"],
                   "Role": ["master"]
@@ -1902,6 +1913,8 @@ package:
                   "Command": ["/opt/mesosphere/bin/calicoctl", "get", "globalNetworkPolicy", "-o", "yaml"],
                   "Role": ["master"]
               },
+{% case "false" %}
+{% endswitch %}
               {
                   "Command": ["/bin/sh", "-c", "cat /proc/`systemctl show dcos-mesos-master.service -p MainPID| cut -d'=' -f2`/environ"],
                   "Role": ["master"]
@@ -2320,31 +2333,31 @@ package:
 {% endswitch %}
       [agent]
         ## Default data collection interval for all inputs
-        interval = "10s"
+        interval = "60s"
         ## Rounds collection interval to 'interval'
         ## ie, if interval="10s" then always collect on :00, :10, :20, etc.
-        round_interval = true
+        round_interval = false
         ## Telegraf will send metrics to outputs in batches of at most
         ## metric_batch_size metrics.
         ## This controls the size of writes that Telegraf sends to output plugins.
-        metric_batch_size = 1000
+        metric_batch_size = 50000
         ## For failed writes, telegraf will cache metric_buffer_limit metrics for each
         ## output, and will flush this buffer on a successful write. Oldest metrics
         ## are dropped first when this buffer fills.
         ## This buffer only fills when writes fail to output plugin(s).
-        metric_buffer_limit = 90000
+        metric_buffer_limit = 500000
         ## Collection jitter is used to jitter the collection by a random amount.
         ## Each plugin will sleep for a random time within jitter before collecting.
         ## This can be used to avoid many plugins querying things like sysfs at the
         ## same time, which can have a measurable effect on the system.
-        collection_jitter = "0s"
+        collection_jitter = "20s"
         ## Default flushing interval for all outputs. You shouldn't set this below
         ## interval. Maximum flush_interval will be flush_interval + flush_jitter
-        flush_interval = "10s"
+        flush_interval = "60s"
         ## Jitter the flush interval by a random amount. This is primarily to avoid
         ## large write spikes for users running a large number of telegraf instances.
         ## ie, a jitter of 5s and interval 10s means flushes will happen every 10-15s
-        flush_jitter = "0s"
+        flush_jitter = "20s"
         ## By default or when set to "0s", precision will be set to the same
         ## timestamp order as the collection interval, with the maximum being 1s.
         ##   ie, when interval = "10s", precision will be "1s"
@@ -2415,7 +2428,7 @@ package:
         ## Address to listen on
         listen = ":61091"
         ## Expiration interval for each metric before it's evicted from cache.
-        expiration_interval = "60s"
+        expiration_interval = "120s"
       # Read metrics from DC/OS Net Prometheus endpoint.
       [[inputs.prometheus]]
         ## An array of urls to scrape metrics from.
@@ -2533,8 +2546,6 @@ package:
         systemd_unit = "dcos-mesos-master.service"
       [[inputs.procstat]]
         systemd_unit = "dcos-metronome.service"
-      [[inputs.procstat]]
-        systemd_unit = "dcos-signal.service"
       [[inputs.procstat]]
         systemd_unit = "dcos-ui-update-service.service"
 {% switch enable_mesos_input_plugin %}
@@ -3096,6 +3107,10 @@ package:
           # Buffer logs to filesystem
           storage.type      filesystem
           Mem_Buf_Limit     100MB
+{% switch calico_enabled %}
+{% case "true" %}
+  - path: /etc/calico/calico_enabled
+    content: ""
   - path: /etc/dcos/network/cni/calico.conf
     content: |
       {
@@ -3155,3 +3170,5 @@ package:
       spec:
         datastoreType: etcdv3
         etcdEndpoints: http://master.dcos.thisdcos.directory:2379
+{% case "false" %}
+{% endswitch %}

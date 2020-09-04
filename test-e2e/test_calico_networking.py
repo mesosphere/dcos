@@ -11,7 +11,8 @@ from typing import Iterator
 import pytest
 
 from _pytest.fixtures import SubRequest
-from cluster_helpers import wait_for_dcos_oss
+from cluster_helpers import artifact_dir_format, dump_cluster_journals, wait_for_dcos_oss
+from conditional import E2E_SAFE_DEFAULT, escape, only_changed, trailing_path
 from dcos_e2e.backends import Docker
 from dcos_e2e.cluster import Cluster
 from dcos_e2e.node import Node, Output
@@ -22,7 +23,7 @@ superuser_username = str(uuid.uuid4())
 superuser_password = str(uuid.uuid4())
 
 
-def assert_system_unit_state(node: Node, unit_name: str, active: bool=True) -> None:
+def assert_system_unit_state(node: Node, unit_name: str, active: bool = True) -> None:
     result = node.run(
         args=["systemctl show {}".format(unit_name)],
         output=Output.LOG_AND_CAPTURE,
@@ -36,14 +37,48 @@ def assert_system_unit_state(node: Node, unit_name: str, active: bool=True) -> N
         assert "ConditionResult=no" in unit_properties
 
 
-@pytest.fixture(scope="module")
-def calico_ipip_cluster(docker_backend: Docker, artifact_path: Path,
-                        request: SubRequest, log_dir: Path) -> Iterator[Cluster]:
+def test_calico_disabled(docker_backend: Docker, artifact_path: Path,
+                         request: SubRequest, log_dir: Path) -> None:
     with Cluster(
             cluster_backend=docker_backend,
             masters=1,
-            agents=2,
+            agents=1,
             public_agents=1,
+    ) as cluster:
+        config = {"calico_enabled": "false"}
+        cluster.install_dcos_from_path(
+            dcos_installer=artifact_path,
+            dcos_config={
+                **cluster.base_config,
+                **config,
+            },
+            output=Output.LOG_AND_CAPTURE,
+            ip_detect_path=docker_backend.ip_detect_path,
+        )
+        wait_for_dcos_oss(
+            cluster=cluster,
+            request=request,
+            log_dir=log_dir,
+        )
+
+        calico_units = ["dcos-calico-felix", "dcos-calico-bird",
+                        "dcos-calico-confd", "dcos-calico-libnetwork-plugin"]
+        for node in cluster.masters | cluster.agents | cluster.public_agents:
+            for unit_name in calico_units:
+                assert_system_unit_state(node, unit_name, active=False)
+
+
+@pytest.fixture(scope="module")
+def calico_ipip_cluster(docker_backend: Docker, artifact_path: Path,
+                        request: SubRequest, log_dir: Path) -> Iterator[Cluster]:
+    # Create a relatively large test cluster, since we've seen problems
+    # when many agents attempt to create the Docker network. See
+    # https://jira.d2iq.com/browse/D2IQ-70674
+    with Cluster(
+            cluster_backend=docker_backend,
+            masters=3,
+            agents=8,
+            public_agents=8,
     ) as cluster:
 
         config = {
@@ -70,40 +105,70 @@ def calico_ipip_cluster(docker_backend: Docker, artifact_path: Path,
         )
         yield cluster
 
-
-def test_calico_ipip_container_connectivity(calico_ipip_cluster: Cluster) -> None:
-
-        environment_variables = {
-            "DCOS_LOGIN_UNAME":
-            superuser_username,
-            "DCOS_LOGIN_PW":
-            superuser_password,
-            "MASTER_PUBLIC_IP":
-            list(calico_ipip_cluster.masters)[0].public_ip_address,
-            "MASTERS_PRIVATE_IPS":
-            [node.private_ip_address for node in calico_ipip_cluster.masters],
-            "PUBLIC_AGENTS_PRIVATE_IPS":
-            [node.public_ip_address for node in calico_ipip_cluster.public_agents],
-            "PRIVATE_AGENTS_PRIVATE_IPS":
-            [node.private_ip_address for node in calico_ipip_cluster.agents],
-        }
-
-        pytest_command = [
-            "pytest",
-            "-vvv",
-            "-s",
-            "-x",
-            "test_networking.py",
-            "-k",
-            "test_calico",
-        ]
-        calico_ipip_cluster.run_with_test_environment(
-            args=pytest_command,
-            env=environment_variables,
-            output=Output.LOG_AND_CAPTURE,
+        dump_cluster_journals(
+            cluster=cluster,
+            target_dir=log_dir / artifact_dir_format(request.node.name),
         )
 
 
+@pytest.mark.skipif(
+    only_changed(E2E_SAFE_DEFAULT + [
+        # All packages safe except named packages
+        'packages/**',
+        '!packages/*treeinfo.json',
+        '!packages/{calico,etcd,java,marathon}/**',  # All packages safe except named packages
+        '!packages/dcos-integration-test/requirements.txt',
+        '!packages/dcos-integration-test/extra/{conftest,test_helpers,test_networking}.py',  # Used in test
+        # All e2e tests safe except this test
+        'test-e2e/test_*', '!' + escape(trailing_path(__file__, 2)),
+    ]),
+    reason='Only safe files modified',
+)
+def test_calico_ipip_container_connectivity(calico_ipip_cluster: Cluster) -> None:
+
+    environment_variables = {
+        "DCOS_LOGIN_UNAME":
+        superuser_username,
+        "DCOS_LOGIN_PW":
+        superuser_password,
+        "MASTER_PUBLIC_IP":
+        list(calico_ipip_cluster.masters)[0].public_ip_address,
+        "MASTERS_PRIVATE_IPS":
+        [node.private_ip_address for node in calico_ipip_cluster.masters],
+        "PUBLIC_AGENTS_PRIVATE_IPS":
+        [node.public_ip_address for node in calico_ipip_cluster.public_agents],
+        "PRIVATE_AGENTS_PRIVATE_IPS":
+        [node.private_ip_address for node in calico_ipip_cluster.agents],
+    }
+
+    pytest_command = [
+        "pytest",
+        "-vvv",
+        "-s",
+        "-x",
+        "test_networking.py",
+        "-k",
+        "test_calico",
+    ]
+    calico_ipip_cluster.run_with_test_environment(
+        args=pytest_command,
+        env=environment_variables,
+        output=Output.LOG_AND_CAPTURE,
+    )
+
+
+@pytest.mark.skipif(
+    only_changed(E2E_SAFE_DEFAULT + [
+        # All packages safe except named packages
+        'packages/**',
+        '!packages/*treeinfo.json',
+        '!packages/{bootstrap,calico,etcd,openssl}/**',
+        '!packages/python*/**',
+        # All e2e tests safe except this test
+        'test-e2e/test_*', '!' + escape(trailing_path(__file__, 2)),
+    ]),
+    reason='Only safe files modified',
+)
 def test_calico_ipip_unit_active(calico_ipip_cluster: Cluster) -> None:
     calico_units = ["dcos-calico-felix", "dcos-calico-bird", "dcos-calico-confd"]
     for node in calico_ipip_cluster.masters | calico_ipip_cluster.agents | calico_ipip_cluster.public_agents:
