@@ -1,12 +1,9 @@
 {
-  "requires": [
-    "java"
-  ],
-  "single_source": {
-    "kind": "url_extract",
-    "url": "https://s3.amazonaws.com/downloads.mesosphere.io/marathon/builds/1.11.2-7cde07166/marathon-1.11.2-7cde07166.tgz",
-    "sha1": "b66ea8d15e1d0c52eff28df9111c8996bb2ec1e5"
+  "requires" : [ "java" ],
+  "single_source" : {
+    "kind" : "url_extract",
+    "url" : "https://s3.amazonaws.com/downloads.mesosphere.io/marathon/builds/1.11.10-19a2d7af1/marathon-1.11.10-19a2d7af1.tgz",
+    "sha1" : "a12931bd40469c94563c3afe490d67672a085a61"
   },
-  "username": "dcos_marathon",
-  "state_directory": true
+  "username" : "dcos_marathon"
 }
