@@ -2,7 +2,7 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 
 ## DC/OS 2.2.0-dev (in development)
 
-* Updated to Mesos [1.11.0-dev](https://github.com/apache/mesos/blob/2bf7f5d8dcb359845a663a011a941809ffc2366d/CHANGELOG)
+* Updated to Mesos [1.11.0-dev](https://github.com/apache/mesos/blob/c28fd3a93e0d9d9a868aec2380abd1dd338304ef/CHANGELOG)
 
 * Update to Fluentbit [1.4.6](https://docs.fluentbit.io/manual/installation/upgrade-notes)
 
@@ -28,7 +28,7 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 
 * Storing etcd initial state on `/var/lib/dcos` instead of `/run/dcos` [COPS-6183](https://jira.d2iq.com/browse/COPS-6183)
 
-* Updated DC/OS UI to [v5.2.1](https://github.com/dcos/dcos-ui/releases/tag/v5.2.1).
+* Updated DC/OS UI to [v6.1.0](https://github.com/dcos/dcos-ui/releases/tag/v6.1.0).
 
 * Removed Exhibitor snapshot cleanup and now rely on ZooKeeper autopurge. (D2IQ-68109)
 
@@ -49,3 +49,11 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 * Log diff to resolv.conf in addition to the new contents. (COPS-6411)
 
 * Turn on `enable_docker_gc` for on-prem by default. (COPS-5520)
+
+* Marathon apps have support for CSI volumes. (MARATHON-8765)
+
+* Stop all services at once during upgrade. (COPS-6512)
+
+* Sequence service start-up to avoid timeouts in CockroachDB unit start. (D2IQ-62292)
+
+* dcos-net now configures NetworkManager ignores for its interfaces (COPS-6519)
