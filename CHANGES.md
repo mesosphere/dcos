@@ -2,7 +2,7 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 
 ## DC/OS 2.2.0-dev (in development)
 
-* Updated to Mesos [1.11.0-dev](https://github.com/apache/mesos/blob/c28fd3a93e0d9d9a868aec2380abd1dd338304ef/CHANGELOG)
+* Updated to Mesos [1.11.0-dev](https://github.com/apache/mesos/blob/d4678d33b223fec5d48007f8246f1ed1cda5e90d/CHANGELOG)
 
 * Update to Fluentbit [1.4.6](https://docs.fluentbit.io/manual/installation/upgrade-notes)
 
@@ -28,7 +28,7 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 
 * Storing etcd initial state on `/var/lib/dcos` instead of `/run/dcos` [COPS-6183](https://jira.d2iq.com/browse/COPS-6183)
 
-* Updated DC/OS UI to [v6.1.0](https://github.com/dcos/dcos-ui/releases/tag/v6.1.0).
+* Updated DC/OS UI to [v6.1.5](https://github.com/dcos/dcos-ui/releases/tag/v6.1.5).
 
 * Removed Exhibitor snapshot cleanup and now rely on ZooKeeper autopurge. (D2IQ-68109)
 
