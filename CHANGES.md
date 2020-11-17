@@ -18,6 +18,8 @@ Please follow the [`CHANGES.md` modification guidelines](https://github.com/dcos
 
 * dcos-net now configures NetworkManager ignores for its interfaces (COPS-6519)
 
+* Fixed dcos-net startup script to configure network ignore file for on-prem (D2IQ-73113).
+
 #### Update Marathon to 1.8.247
 
 * Allow migrations to re-run by default (MARATHON-8762)
